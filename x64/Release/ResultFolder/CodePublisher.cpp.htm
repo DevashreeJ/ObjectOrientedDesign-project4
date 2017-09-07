@@ -1,0 +1,15 @@
+<html><head><link rel=stylesheet type=text/css href=../styleFile.css><script src=../scriptFile.js></script><body><h3>CodePublisher.cpp.htm</h3><hr/><div class ="indent"><h4>Dependencies:</h4><br><a href =../ResultFolder/CodePublisher.h.htm>CodePublisher.h</a><br><br><a href =../ResultFolder/DepAnal.h.htm>DepAnal.h</a><br><br><a href =../ResultFolder/DependencyAnalysis.h.htm>DependencyAnalysis.h</a><br><br><a href =../ResultFolder/Executive.cpp.htm>Executive.cpp</a><br><br><a href =../ResultFolder/Executive.h.htm>Executive.h</a><br><br><a href =../ResultFolder/Logger.cpp.htm>Logger.cpp</a><br><br><a href =../ResultFolder/Logger.h.htm>Logger.h</a><br><br><a href =../ResultFolder/Sockets.cpp.htm>Sockets.cpp</a><br><br><a href =../ResultFolder/Sockets.h.htm>Sockets.h</a><br><br><a href =../ResultFolder/TypeTable.h.htm>TypeTable.h</a><br></div><hr/><pre>#include"CodePublisher.h"
+#ifdef DEBUG
+
+void main()
+<a href = javascript:toggle_visibility('0');>{</a><div id=0>
+	std::string destFile;
+	destFile = "../ResultFolder/A.h.htm";
+	std::string command("start \"\" \"" + destFile + "\"");
+	// the command is: [ start "" "..\test files\page.html" ]
+	// using [ start ..\text files\page.html ] will fail to start
+	// using [ start "..\test files\page.html" ] will only start new command window with the current directory
+	std::system(command.c_str());
+}</div>
+
+#endif // DEBUG</pre></body></html>

@@ -1,0 +1,17 @@
+
+  <?xml version="1.0">
+  <Dependency Table>
+    <File Name>
+      C:\Users\devas\OneDrive\Documents\Visual Studio 2015\Projects\oodProject3_Final\proj_4\CommPrototype\ServerFiles\Logger.cpp.cpp
+    </File Name>
+    <Dependencies>
+      Logger.cpp.cpp
+    </Dependencies>
+    <File Name>
+      C:\Users\devas\OneDrive\Documents\Visual Studio 2015\Projects\oodProject3_Final\proj_4\CommPrototype\ServerFiles\Sockets.cpp.cpp
+    </File Name>
+    <Dependencies>
+      Logger.cpp.cpp
+      Sockets.cpp.cpp
+    </Dependencies>
+  </Dependency Table>

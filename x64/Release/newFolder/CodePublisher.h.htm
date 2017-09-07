@@ -1,0 +1,171 @@
+#pragma once
+#include&ltiostream&gt
+#include&ltunordered_map&gt
+#include&ltset&gt
+#include&ltstring&gt
+#include&ltfstream&gt
+#include&ltdirect.h&gt
+
+class Publish
+{
+private:
+	std::unordered_map&ltstd::string, std::set&ltstd::string&gt&gt deptab;
+	std::unordered_map&ltstd::string, std::set&ltstd::string&gt&gt tempTab;
+	std::set&ltstd::string&gt filesDependedOn;
+	std::set&ltstd::string&gt filesDependedOnfortempTab;
+
+public:
+	void makeHtmFiles(std::unordered_map&ltstd::string, std::set&ltstd::string&gt&gt &table);
+	void createCopy(std::string src, std::string dest);
+	void dependencyMapping();
+	std::string ExtractFileName(const std::string &path);
+	void LaunchFiles();
+};
+
+inline void Publish::makeHtmFiles(std::unordered_map&ltstd::string, std::set&ltstd::string&gt&gt &table)
+{
+	_mkdir("newFolder");
+	//tempTab = table;
+	auto iter = table.begin();
+	while (iter != table.end())
+	{
+		std::string common = "newFolder/";
+		std::string temp = iter-&gtfirst;
+		std::string file2 = ExtractFileName(temp);
+		std::string file = ExtractFileName(temp);
+		std::cout &lt&lt file;
+		std::string filewithExtension = file.append(".htm");
+		std::string finaldestFile = common.append(filewithExtension);
+		//std::cout &lt&lt finaldestFile &lt&lt std::endl;
+		createCopy(temp, finaldestFile);
+		auto it = iter-&gtsecond.begin();
+		while (it != iter-&gtsecond.end())
+		{
+			std::string tmp = *it;
+			filesDependedOnfortempTab.insert(tmp);
+			tmp = tmp.append(".htm");
+			filesDependedOn.insert(tmp);
+			it++;
+
+		}
+		deptab.insert(std::make_pair(filewithExtension, filesDependedOn));
+		tempTab.insert(std::make_pair(file2, filesDependedOnfortempTab));
+		iter++;
+	}
+}
+
+inline void Publish::createCopy(std::string src, std::string dest)
+{
+	std::ifstream f_src;
+	std::ofstream f_dest;
+	f_src.open(src);
+	f_dest.open(dest);
+	char tmp;
+	while (f_src.get(tmp))
+	{
+		if (tmp == '&lt')
+			f_dest &lt&lt "&lt";
+		else if (tmp == '&gt')
+			f_dest &lt&lt "&gt";
+		else
+			f_dest &lt&lt tmp;
+	}
+}
+
+inline std::string Publish::ExtractFileName(const std::string& fullPath)
+{
+	const size_t lastSlashIndex = fullPath.find_last_of("/\\");
+	return fullPath.substr(lastSlashIndex + 1);
+}
+
+void Publish::dependencyMapping()
+{
+	//std::cout &lt&lt "\nhere\n";
+	_mkdir("ResultFolder");
+	auto iter = deptab.begin();
+	auto tempiter = tempTab.begin();
+	while (iter != deptab.end())
+	{
+		std::string opstring = "ResultFolder/";
+		std::string ipstring = "newFolder/";
+		std::string inputFilestring = ipstring.append(iter-&gtfirst);
+		std::string outputFilestring = opstring.append(iter-&gtfirst);
+		std::ofstream Indexfile;
+		std::ofstream outputFile;
+		std::ifstream inputFile;
+		char temp;
+		outputFile.open(outputFilestring);
+		inputFile.open(inputFilestring);
+		outputFile &lt&lt "&lthtml&gt";
+		outputFile &lt&lt "&lthead&gt";
+		outputFile &lt&lt "&ltlink rel =" &lt&lt "\"stylesheet\"" &lt&lt "href = " &lt&lt "\"../CssRequirements/styleFile.css\"" &lt&lt "&gt";
+		outputFile &lt&lt "&lt/head&gt";
+		outputFile &lt&lt "&ltbody&gt";
+		outputFile &lt&lt "&lth3&gt" &lt&lt iter-&gtfirst &lt&lt "&lt/h3&gt";
+		outputFile &lt&lt "&lthr/&gt";
+		outputFile &lt&lt "&ltdiv class =" &lt&lt "\"indent\"" &lt&lt "&gt";
+		outputFile &lt&lt "&lth4&gtDependencies:&lt/h4&gt";
+		auto it = tempiter-&gtsecond.begin();
+		auto it2 = iter-&gtsecond.begin();
+		while (it != tempiter-&gtsecond.end() && it2!= iter-&gtsecond.end())
+		{
+			outputFile &lt&lt "&ltbr&gt";//(*it).erase((*it).length()-3,4)
+			//std::cout &lt&lt *it2 &lt&lt *it;
+			outputFile &lt&lt "&lta href =../ResultFolder/" &lt&lt *it2 &lt&lt "&gt" &lt&lt *it &lt&lt "&lt/a&gt";
+			outputFile &lt&lt "&ltbr&gt";
+			it++;
+			it2++;
+		}
+		outputFile &lt&lt "&lt/div&gt";
+		outputFile &lt&lt "&lthr/&gt";
+		outputFile &lt&lt "&ltpre&gt";
+		while (inputFile.get(temp))
+		{
+			if (temp == '&lt')
+				outputFile &lt&lt "&lt";
+			else if (temp == '&gt')
+				outputFile &lt&lt "&gt";
+			else
+				outputFile &lt&lt temp;
+		}
+		outputFile &lt&lt "&lt/pre&gt";
+		outputFile &lt&lt "&lt/body&gt";
+		outputFile &lt&lt "&lt/html&gt";
+		iter++;
+		tempiter++;
+	}
+	
+	LaunchFiles();
+}
+inline void Publish::LaunchFiles()
+{
+	auto iter = deptab.begin();
+	auto tempiter = tempTab.begin();
+	std::ofstream IndexFile;
+	IndexFile.open("ResultFolder/IndexFile.htm");
+	IndexFile &lt&lt "&lthtml&gt";
+	IndexFile &lt&lt "&lthead&gt";
+	IndexFile &lt&lt "&ltlink rel =" &lt&lt "\"stylesheet\"" &lt&lt "href = " &lt&lt "\"../CssRequirements/styleFile.css\"" &lt&lt "&gt";
+	IndexFile &lt&lt "&lt/head&gt";
+	IndexFile &lt&lt "&ltbody&gt";
+	IndexFile &lt&lt "&lth3&gtIndex Of Files&lt/h3&gt";
+	while (iter != deptab.end()&& tempiter!=tempTab.end())
+	{
+		IndexFile &lt&lt "&lta href =../ResultFolder/" &lt&lt iter-&gtfirst &lt&lt "&gt" &lt&lt tempiter-&gtfirst &lt&lt "&lt/a&gt";
+		std::cout&lt&lttempiter-&gtfirst;
+		IndexFile &lt&lt "&ltbr&gt";
+		iter++;
+		tempiter++;
+	}
+	IndexFile &lt&lt "&lt/pre&gt";
+	IndexFile &lt&lt "&lt/body&gt";
+	IndexFile &lt&lt "&lt/html&gt";
+	IndexFile.close();
+	std::string destFile;
+	destFile = "ResultFolder/IndexFile.htm";
+	std::string command("start \"\" \"" + destFile + "\"");
+	std::system(command.c_str());
+}
+
+
+

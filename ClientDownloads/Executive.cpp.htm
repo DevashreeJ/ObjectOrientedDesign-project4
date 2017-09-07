@@ -1,0 +1,934 @@
+<html><head><link rel=stylesheet type=text/css href=../styleFile.css><script src=../scriptFile.js></script><body><h3>Executive.cpp.htm</h3><hr/><div class ="indent"><h4>Dependencies:</h4><br><a href =../ResultFolder/CodePublisher.h.htm>CodePublisher.h</a><br><br><a href =../ResultFolder/DepAnal.h.htm>DepAnal.h</a><br><br><a href =../ResultFolder/DependencyAnalysis.h.htm>DependencyAnalysis.h</a><br><br><a href =../ResultFolder/Executive.cpp.htm>Executive.cpp</a><br><br><a href =../ResultFolder/Executive.h.htm>Executive.h</a><br><br><a href =../ResultFolder/TypeTable.h.htm>TypeTable.h</a><br></div><hr/><pre>/////////////////////////////////////////////////////////////////////
+// Executive.cpp - Directs Code Analysis                           //
+// ver 1.4                                                         //
+//-----------------------------------------------------------------//
+// Jim Fawcett (c) copyright 2016                                  //
+// All rights granted provided this copyright notice is retained   //
+//-----------------------------------------------------------------//
+// Language:    C++, Visual Studio 2015                            //
+// Platform:    Dell XPS 8900, Windows 10                          //
+// Application: Project #2, CSE687 - Object Oriented Design, S2015 //
+// Author:      Jim Fawcett, Syracuse University, CST 4-187        //
+//              jfawcett@twcny.rr.com                              //
+/////////////////////////////////////////////////////////////////////
+
+#include "Executive.h"
+#include &ltsstream&gt
+#include &ltstring&gt
+#include &ltvector&gt
+#include &ltmap&gt
+#include &ltunordered_map&gt
+#include &ltfunctional&gt
+#include &ltalgorithm&gt
+#include &ltexception&gt
+#include &ltiomanip&gt
+#include &ltchrono&gt
+#include &ltctime&gt
+
+//#include "../Parser/Parser.h"
+//#include "../FileSystem/FileSystem.h"
+//#include "../FileMgr/FileMgr.h"
+//#include "../Parser/ActionsAndRules.h"
+//#include "../Parser/ConfigureParser.h"
+//#include "../AbstractSyntaxTree/AbstrSynTree.h"
+#include "../Logger/Logger.h"
+#include "../Utilities/Utilities.h"
+#include "../Analyzer/DepAnal.h"
+//#include "../DependencyAnalysis/DependencyAnalysis.h"
+#include "../CodePublisher/CodePublisher.h"
+
+
+
+using Rslt = Logging::StaticLogger&lt0&gt;  // use for application results
+using Demo = Logging::StaticLogger&lt1&gt;  // use for demonstrations of processing
+using Dbug = Logging::StaticLogger&lt2&gt;  // use for debug output
+
+
+/////////////////////////////////////////////////////////////////////
+// AnalFileMgr class
+// - Derives from FileMgr to make application specific file handler
+//   by overriding FileMgr::file(), FileMgr::dir(), and FileMgr::done()
+
+using Path = std::string;
+using File = std::string;
+using Files = std::vector&ltFile&gt;
+using Pattern = std::string;
+using Ext = std::string;
+using FileMap = std::unordered_map&ltPattern, Files&gt;
+
+//using Mapping = std::unordered_map&ltstd::string, std::string&gt;
+using namespace CodeAnalysis;
+
+//----&lt initialize application specific FileMgr &gt--------------------
+/*
+ * - Accepts CodeAnalysisExecutive's path and fileMap by reference
+ */
+AnalFileMgr::AnalFileMgr(const Path& path, FileMap& fileMap)
+  : FileMgr(path), fileMap_(fileMap), numFiles_(0), numDirs_(0) <a href = javascript:toggle_visibility('0');>{</a><div id=0>}</div>
+
+//----&lt override of FileMgr::file(...) to store found files &gt------
+
+void AnalFileMgr::file(const File& f)
+<a href = javascript:toggle_visibility('1');>{</a><div id=1>
+  File fqf = d_ + "\\" + f;
+  Ext ext = FileSystem::Path::getExt(fqf);
+  Pattern p = "*." + ext;
+  fileMap_[p].push_back(fqf);
+  ++numFiles_;
+}</div>
+//----&lt override of FileMgr::dir(...) to save current dir &gt----------
+
+void AnalFileMgr::dir(const Dir& d)
+<a href = javascript:toggle_visibility('2');>{</a><div id=2>
+  d_ = d;
+  ++numDirs_;
+}</div>
+//----&lt override of FileMgr::done(), not currently used &gt------------
+
+void AnalFileMgr::done()
+<a href = javascript:toggle_visibility('3');>{</a><div id=3>
+}</div>
+//----&lt returns number of matched files from search &gt----------------
+
+size_t AnalFileMgr::numFiles()
+<a href = javascript:toggle_visibility('4');>{</a><div id=4>
+  return numFiles_;
+}</div>
+//----&lt returns number of dirs searched &gt----------------------------
+
+size_t AnalFileMgr::numDirs()
+<a href = javascript:toggle_visibility('5');>{</a><div id=5>
+  return numDirs_;
+}</div>
+
+/////////////////////////////////////////////////////////////////////
+// CodeAnalysisExecutive class
+// - 
+using Path = std::string;
+using Pattern = std::string;
+using Patterns = std::vector&ltPattern&gt;
+using File = std::string;
+using Files = std::vector&ltFile&gt;
+using Ext = std::string;
+using FileMap = std::unordered_map&ltPattern, Files&gt;
+using ASTNodes = std::vector&ltASTNode*&gt;
+using FileToNodeCollection = std::vector&ltstd::pair&ltFile, ASTNode*&gt&gt;
+
+//----&lt initialize parser, get access to repository &gt----------------
+
+CodeAnalysisExecutive::CodeAnalysisExecutive()
+<a href = javascript:toggle_visibility('6');>{</a><div id=6>
+  pParser_ = configure_.Build();
+  if (pParser_ == nullptr)
+  <a href = javascript:toggle_visibility('7');>{</a><div id=7>
+    throw std::exception("couldn't create parser");
+  }</div>
+  pRepo_ = Repository::getInstance();
+}</div>
+//----&lt cleanup &gt----------------------------------------------------
+
+CodeAnalysisExecutive::~CodeAnalysisExecutive()
+<a href = javascript:toggle_visibility('8');>{</a><div id=8>
+  /*
+   *  Nothing to do:
+   *  - pParser_ and pRepo_ point to objects that the configure_
+   *    destructor will delete.
+   *  - The AbstractSynTree object will cleanup its contents when
+   *    it goes out of scope by deleting the root of the AST node
+   *    tree.  
+   *  - Each node deletes its children, so, again, nothing more 
+   *    to do.
+   *  - This is here to present these comments and to make this
+   *    base destructor virtual.
+   */
+}</div>
+//----&lt usage message &gt----------------------------------------------
+
+void showUsage()
+<a href = javascript:toggle_visibility('9');>{</a><div id=9>
+  std::ostringstream out;
+  out &lt&lt "\n  Usage:";
+  out &lt&lt "\n  Command Line Arguments are:";
+  out &lt&lt "\n  - 1st: path to subdirectory containing files to analyze";
+  out &lt&lt "\n  - remaining non-option arguments are file patterns, e.g., *.h and/or *.cpp, etc.";
+  out &lt&lt "\n  - must have at least one file pattern to specify what to process";
+  out &lt&lt "\n  - option arguments have the format \"\"/x\" , where x is one of the options:";
+  out &lt&lt "\n    - m : display function metrics";
+  out &lt&lt "\n    - s : display file sizes";
+  out &lt&lt "\n    - a : display Abstract Syntax Tree";
+  out &lt&lt "\n    - r : set logger to display results";
+  out &lt&lt "\n    - d : set logger to display demo outputs";
+  out &lt&lt "\n    - b : set logger to display debug outputs";
+  out &lt&lt "\n    - f : write all logs to logfile.txt";
+  out &lt&lt "\n  A metrics summary is always shown, independent of any options used or not used";
+  out &lt&lt "\n\n";
+  std::cout &lt&lt out.str();
+  //Rslt::write(out.str());
+  //Rslt::flush();
+}</div>
+//----&lt show command line arguments &gt--------------------------------
+
+void CodeAnalysisExecutive::showCommandLineArguments(int argc, char* argv[])
+<a href = javascript:toggle_visibility('10');>{</a><div id=10>
+  std::ostringstream out;
+  out &lt&lt "\n     Path: \"" &lt&lt FileSystem::Path::getFullFileSpec(argv[1]) &lt&lt "\"\n     Args: ";
+  for (int i = 2; i &lt argc - 1; ++i)
+    out &lt&lt argv[i] &lt&lt ", ";
+  out &lt&lt argv[argc - 1];
+  Rslt::write(out.str());
+  Rslt::flush();
+}</div>
+//----&lt handle command line arguments &gt------------------------------
+/*
+* Arguments are:
+* - path: possibly relative path to folder containing all analyzed code,
+*   e.g., may be anywhere in the directory tree rooted at that path
+* - patterns: one or more file patterns of the form *.h, *.cpp, and *.cs
+* - options: /m (show metrics), /s (show file sizes), and /a (show AST)
+*/
+bool CodeAnalysisExecutive::ProcessCommandLine(int argc, char* argv[])
+<a href = javascript:toggle_visibility('11');>{</a><div id=11>
+  if (argc &lt 2)
+  <a href = javascript:toggle_visibility('12');>{</a><div id=12>
+    showUsage();
+    return false;
+  }</div>
+  try <a href = javascript:toggle_visibility('13');>{</a><div id=13>
+    path_ = FileSystem::Path::getFullFileSpec(argv[1]);
+    if (!FileSystem::Directory::exists(path_))
+    <a href = javascript:toggle_visibility('14');>{</a><div id=14>
+      std::cout &lt&lt "\n\n  path \"" &lt&lt path_ &lt&lt "\" does not exist\n\n";
+      return false;
+    }</div>
+    for (int i = 2; i &lt argc; ++i)
+    <a href = javascript:toggle_visibility('15');>{</a><div id=15>
+      if (argv[i][0] == '/')
+        options_.push_back(argv[i][1]);
+      else
+        patterns_.push_back(argv[i]);
+    }</div>
+    if (patterns_.size() == 0)
+    <a href = javascript:toggle_visibility('16');>{</a><div id=16>
+      showUsage();
+      return false;
+    }</div>
+  }</div>
+  catch (std::exception& ex)
+  <a href = javascript:toggle_visibility('17');>{</a><div id=17>
+    std::cout &lt&lt "\n\n  command line argument parsing error:";
+    std::cout &lt&lt "\n  " &lt&lt ex.what() &lt&lt "\n\n";
+    return false;
+  }</div>
+  return true;
+}</div>
+//----&lt returns path entered on command line &gt-------------------
+
+std::string CodeAnalysisExecutive::getAnalysisPath()
+<a href = javascript:toggle_visibility('18');>{</a><div id=18>
+  return path_;
+}</div>
+//----&lt returns reference to FileMap &gt---------------------------
+/*
+ * Supports quickly finding all the files found with a give pattern
+ */
+FileMap& CodeAnalysisExecutive::getFileMap()
+<a href = javascript:toggle_visibility('19');>{</a><div id=19>
+  return fileMap_;
+}</div>
+//----&lt searches path for files matching specified patterns &gt----
+/*
+ * - Searches entire diretory tree rooted at path_, evaluated 
+ *   from a command line argument.
+ * - Saves found files in FileMap.
+ */
+void CodeAnalysisExecutive::getSourceFiles()
+<a href = javascript:toggle_visibility('20');>{</a><div id=20>
+  AnalFileMgr fm(path_, fileMap_);
+  for (auto patt : patterns_)
+    fm.addPattern(patt);
+  fm.search();
+  numFiles_ = fm.numFiles();
+  numDirs_ = fm.numDirs();
+}</div>
+//----&lt helper: is text a substring of str? &gt--------------------
+
+bool contains(const std::string& str, const std::string& text)
+<a href = javascript:toggle_visibility('21');>{</a><div id=21>
+  if (str.find(text) &lt str.length())
+    return true;
+  return false;
+}</div>
+//----&lt retrieve from fileMap all files matching *.h &gt-----------
+
+std::vector&ltFile&gt& CodeAnalysisExecutive::cppHeaderFiles()
+<a href = javascript:toggle_visibility('22');>{</a><div id=22>
+  cppHeaderFiles_.clear();
+  for (auto item : fileMap_)
+  <a href = javascript:toggle_visibility('23');>{</a><div id=23>
+    if (contains(item.first, "*.h"))
+    <a href = javascript:toggle_visibility('24');>{</a><div id=24>
+      for (auto file : item.second)
+        cppHeaderFiles_.push_back(file);
+    }</div>
+  }</div>
+  return cppHeaderFiles_;
+}</div>
+//----&lt retrieve from fileMap all files matching *.cpp &gt---------
+
+std::vector&ltFile&gt& CodeAnalysisExecutive::cppImplemFiles()
+<a href = javascript:toggle_visibility('25');>{</a><div id=25>
+  cppImplemFiles_.clear();
+  for (auto item : fileMap_)
+  <a href = javascript:toggle_visibility('26');>{</a><div id=26>
+    if (contains(item.first, "*.cpp"))
+    <a href = javascript:toggle_visibility('27');>{</a><div id=27>
+      for (auto file : item.second)
+        cppImplemFiles_.push_back(file);
+    }</div>
+  }</div>
+  return cppImplemFiles_;
+}</div>
+//----&lt retrieve from fileMap all files matching *.cs &gt----------
+
+std::vector&ltFile&gt& CodeAnalysisExecutive::csharpFiles()
+<a href = javascript:toggle_visibility('28');>{</a><div id=28>
+  csharpFiles_.clear();
+  for (auto item : fileMap_)
+  <a href = javascript:toggle_visibility('29');>{</a><div id=29>
+    if (contains(item.first, "*.cs"))
+    <a href = javascript:toggle_visibility('30');>{</a><div id=30>
+      for (auto file : item.second)
+        csharpFiles_.push_back(file);
+    }</div>
+  }</div>
+  return csharpFiles_;
+}</div>
+//----&lt report number of Source Lines Of Code (SLOCs) &gt----------
+
+CodeAnalysisExecutive::Slocs CodeAnalysisExecutive::fileSLOCs(const File& file) 
+<a href = javascript:toggle_visibility('31');>{</a><div id=31> 
+  return slocMap_[file];
+}</div>
+//----&lt report number of files processed &gt-----------------------
+
+size_t CodeAnalysisExecutive::numFiles()
+<a href = javascript:toggle_visibility('32');>{</a><div id=32>
+  return numFiles_;
+}</div>
+//----&lt report number of directories searched &gt------------------
+
+size_t CodeAnalysisExecutive::numDirs()
+<a href = javascript:toggle_visibility('33');>{</a><div id=33>
+  return numDirs_;
+}</div>
+//----&lt show processing activity &gt-------------------------------
+
+void CodeAnalysisExecutive::showActivity(const File& file)
+<a href = javascript:toggle_visibility('34');>{</a><div id=34>
+  std::function&ltstd::string(std::string, size_t)&gt trunc = [](std::string in, size_t count)
+  <a href = javascript:toggle_visibility('35');>{</a><div id=35>
+    return in.substr(0, count);
+  }</div>;
+
+  if (Rslt::running())
+  <a href = javascript:toggle_visibility('36');>{</a><div id=36>
+    std::cout &lt&lt std::left &lt&lt "\r     Processing file: " &lt&lt std::setw(80) &lt&lt trunc(file, 80);
+  }</div>
+}</div>
+
+void CodeAnalysisExecutive::clearActivity()
+<a href = javascript:toggle_visibility('37');>{</a><div id=37>
+  if (Rslt::running())
+  <a href = javascript:toggle_visibility('38');>{</a><div id=38>
+    std::cout &lt&lt std::left &lt&lt "\r                      " &lt&lt std::setw(80) &lt&lt std::string(80,' ');
+  }</div>
+}</div>
+//----&lt parses code and saves results in AbstrSynTree &gt--------------
+/*
+* - Processes C++ header files first to build AST with nodes for
+*   all public classes and structs.
+* - Then processes C++ implementation files.  Each member function
+*   is relocated to its class scope node, not the local scope.
+* - Therefore, this ordering is important.
+* - C# code has all member functions inline, so we don't need to
+*   do any relocation of nodes in the AST.  Therefore, that analysis
+*   can be done at any time.
+* - If you bore down into the analysis code in ActionsAndRules.h you
+*   will find some gymnastics to handle template syntax.  That can
+*   get somewhat complicated, so there may be some latent bugs there.
+*   I don't know of any at this time.
+*/
+void CodeAnalysisExecutive::setLanguage(const File& file)
+<a href = javascript:toggle_visibility('39');>{</a><div id=39>
+  std::string ext = FileSystem::Path::getExt(file);
+  if (ext == "h" || ext == "cpp")
+    pRepo_-&gtlanguage() = Language::Cpp;
+  else if (ext == "cs")
+    pRepo_-&gtlanguage() = Language::CSharp;
+}</div>
+
+void CodeAnalysisExecutive::processSourceCode(bool showProc)
+<a href = javascript:toggle_visibility('40');>{</a><div id=40>
+  for (auto file : cppHeaderFiles())
+  <a href = javascript:toggle_visibility('41');>{</a><div id=41>
+    if (showProc)
+      showActivity(file);
+    pRepo_-&gtpackage() = FileSystem::Path::getName(file);
+
+    if (!configure_.Attach(file))
+    <a href = javascript:toggle_visibility('42');>{</a><div id=42>
+      std::ostringstream out;
+      out &lt&lt "\n  could not open file " &lt&lt file &lt&lt "\n";
+      Rslt::write(out.str());
+      Rslt::flush();
+      continue;
+    }</div>
+    // parse file
+    Rslt::flush();
+    Demo::flush();
+    Dbug::flush();
+
+    if(!Rslt::running())
+      Demo::write("\n\n  opening file \"" + pRepo_-&gtpackage() + "\"");
+    if(!Demo::running() && !Rslt::running())
+      Dbug::write("\n\n  opening file \"" + pRepo_-&gtpackage() + "\"");
+    pRepo_-&gtlanguage() = Language::Cpp;
+    pRepo_-&gtcurrentPath() = file;
+    while (pParser_-&gtnext())
+    <a href = javascript:toggle_visibility('43');>{</a><div id=43>
+      pParser_-&gtparse();
+    }</div>
+
+    Slocs slocs = pRepo_-&gtToker()-&gtcurrentLineCount();
+    slocMap_[pRepo_-&gtpackage()] = slocs;
+  }</div>
+  for (auto file : cppImplemFiles())
+  <a href = javascript:toggle_visibility('44');>{</a><div id=44>
+    if (showProc)
+      showActivity(file);
+    pRepo_-&gtpackage() = FileSystem::Path::getName(file);
+
+    if (!configure_.Attach(file))
+    <a href = javascript:toggle_visibility('45');>{</a><div id=45>
+      std::ostringstream out;
+      out &lt&lt "\n  could not open file " &lt&lt file &lt&lt "\n";
+      Rslt::write(out.str());
+      Rslt::flush();
+      continue;
+    }</div>
+    // parse file
+
+    if (!Rslt::running())
+      Demo::write("\n\n  opening file \"" + pRepo_-&gtpackage() + "\"");
+    if (!Demo::running() && !Rslt::running())
+      Dbug::write("\n\n  opening file \"" + pRepo_-&gtpackage() + "\"");
+    pRepo_-&gtlanguage() = Language::Cpp;
+    pRepo_-&gtcurrentPath() = file;
+    while (pParser_-&gtnext())
+      pParser_-&gtparse();
+
+    Slocs slocs = pRepo_-&gtToker()-&gtcurrentLineCount();
+    slocMap_[pRepo_-&gtpackage()] = slocs;
+  }</div>
+  for (auto file : csharpFiles())
+  <a href = javascript:toggle_visibility('46');>{</a><div id=46>
+    if (showProc)
+      showActivity(file);
+    pRepo_-&gtpackage() = FileSystem::Path::getName(file);
+
+    if (!configure_.Attach(file))
+    <a href = javascript:toggle_visibility('47');>{</a><div id=47>
+      std::ostringstream out;
+      out &lt&lt "\n  could not open file " &lt&lt file &lt&lt "\n";
+      Rslt::write(out.str());
+      continue;
+    }</div>
+    // parse file
+
+    if (!Rslt::running())
+      Demo::write("\n\n  opening file \"" + pRepo_-&gtpackage() + "\"");
+    if (!Demo::running() && !Rslt::running())
+      Dbug::write("\n\n  opening file \"" + pRepo_-&gtpackage() + "\"");
+    pRepo_-&gtlanguage() = Language::CSharp;
+    pRepo_-&gtcurrentPath() = file;
+    while (pParser_-&gtnext())
+      pParser_-&gtparse();
+
+    Slocs slocs = pRepo_-&gtToker()-&gtcurrentLineCount();
+    slocMap_[pRepo_-&gtpackage()] = slocs;
+  }</div>
+  if (showProc)
+    clearActivity();
+  std::ostringstream out;
+  out &lt&lt std::left &lt&lt "\r  " &lt&lt std::setw(77) &lt&lt " ";
+  Rslt::write(out.str());
+}</div>
+//----&lt evaluate complexities of each AST node &gt---------------------
+
+void CodeAnalysisExecutive::complexityAnalysis()
+<a href = javascript:toggle_visibility('48');>{</a><div id=48>
+  ASTNode* pGlobalScope = pRepo_-&gtgetGlobalScope();
+  CodeAnalysis::complexityEval(pGlobalScope);
+}</div>
+//----&lt comparison functor for sorting FileToNodeCollection &gt----
+/*
+* - supports stable sort on extension values
+* - displayMetrics(...) uses to organize metrics display
+*/
+struct CompExts
+<a href = javascript:toggle_visibility('49');>{</a><div id=49>
+  bool operator()(const std::pair&ltFile, ASTNode*&gt& first, const std::pair&ltFile, ASTNode*&gt& second)
+  <a href = javascript:toggle_visibility('50');>{</a><div id=50>
+    return FileSystem::Path::getExt(first.first) &gt FileSystem::Path::getExt(second.first);
+  }</div>
+}</div>;
+//----&lt comparison functor for sorting FileToNodeCollection &gt----
+/*
+* - supports stable sort on name values
+* - displayMetrics(...) uses these functions to organize metrics display
+*/
+static void removeExt(std::string& name)
+<a href = javascript:toggle_visibility('51');>{</a><div id=51>
+  size_t extStartIndex = name.find_last_of('.');
+  name = name.substr(0, extStartIndex);
+}</div>
+
+struct CompNames
+<a href = javascript:toggle_visibility('52');>{</a><div id=52>
+  bool operator()(const std::pair&ltFile, ASTNode*&gt& first, const std::pair&ltFile, ASTNode*&gt& second)
+  <a href = javascript:toggle_visibility('53');>{</a><div id=53>
+    std::string fnm = FileSystem::Path::getName(first.first);
+    removeExt(fnm);
+    std::string snm = FileSystem::Path::getName(second.first);
+    removeExt(snm);
+    return fnm &lt snm;
+  }</div>
+}</div>;
+//----&lt display header line for displayMmetrics() &gt------------------
+
+void CodeAnalysisExecutive::displayHeader()
+<a href = javascript:toggle_visibility('54');>{</a><div id=54>
+  std::ostringstream out;
+  out &lt&lt std::right;
+  out &lt&lt "\n ";
+  out &lt&lt std::setw(25) &lt&lt "file name";
+  out &lt&lt std::setw(12) &lt&lt "type";
+  out &lt&lt std::setw(35) &lt&lt "name";
+  out &lt&lt std::setw(8) &lt&lt "line";
+  out &lt&lt std::setw(8) &lt&lt "size";
+  out &lt&lt std::setw(8) &lt&lt "cplx";
+  out &lt&lt std::right;
+  out &lt&lt "\n  ";
+  out &lt&lt std::setw(25) &lt&lt "-----------------------";
+  out &lt&lt std::setw(12) &lt&lt "----------";
+  out &lt&lt std::setw(35) &lt&lt "---------------------------------";
+  out &lt&lt std::setw(8) &lt&lt "------";
+  out &lt&lt std::setw(8) &lt&lt "------";
+  out &lt&lt std::setw(8) &lt&lt "------";
+  Rslt::write(out.str());
+}</div>
+//----&lt display single line for displayMetrics() &gt-------------------
+
+void CodeAnalysisExecutive::displayMetricsLine(const File& file, ASTNode* pNode)
+<a href = javascript:toggle_visibility('55');>{</a><div id=55>
+  std::function&ltstd::string(std::string, size_t)&gt trunc = [](std::string in, size_t count)
+  <a href = javascript:toggle_visibility('56');>{</a><div id=56>
+    return in.substr(0, count);
+  }</div>;
+  std::ostringstream out;
+  out &lt&lt std::right;
+  out &lt&lt "\n ";
+  out &lt&lt std::setw(25) &lt&lt trunc(file, 23);
+  out &lt&lt std::setw(12) &lt&lt pNode-&gttype_;
+  out &lt&lt std::setw(35) &lt&lt trunc(pNode-&gtname_, 33);
+  out &lt&lt std::setw(8) &lt&lt pNode-&gtstartLineCount_;
+  out &lt&lt std::setw(8) &lt&lt pNode-&gtendLineCount_ - pNode-&gtstartLineCount_ + 1;
+  size_t debug1 = pNode-&gtstartLineCount_;
+  size_t debug2 = pNode-&gtendLineCount_;
+  out &lt&lt std::setw(8) &lt&lt pNode-&gtcomplexity_;
+  Rslt::write(out.str());
+}</div>
+//----&lt display lines containing public data declaration &gt-----------
+
+std::string CodeAnalysisExecutive::showData(const Scanner::ITokCollection* pTc)
+<a href = javascript:toggle_visibility('57');>{</a><div id=57>
+  std::string semiExpStr;
+  for (size_t i=0; i&ltpTc-&gtlength(); ++i)
+    semiExpStr += (*pTc)[i] + " ";
+  return semiExpStr;
+}</div>
+
+void CodeAnalysisExecutive::displayDataLines(ASTNode* pNode, bool isSummary)
+<a href = javascript:toggle_visibility('58');>{</a><div id=58>
+  for (auto datum : pNode-&gtdecl_)
+  <a href = javascript:toggle_visibility('59');>{</a><div id=59>
+    if (pNode-&gtparentType_ == "namespace" || pNode-&gtparentType_ == "class" || pNode-&gtparentType_ == "struct")
+    <a href = javascript:toggle_visibility('60');>{</a><div id=60>
+      if (pNode-&gttype_ == "function" || pNode-&gtparentType_ == "function")
+        continue;
+      if (datum.access_ == Access::publ && datum.declType_ == DeclType::dataDecl)
+      <a href = javascript:toggle_visibility('61');>{</a><div id=61>
+        std::ostringstream out;
+        out &lt&lt std::right;
+        out &lt&lt "\n ";
+        out &lt&lt std::setw(25) &lt&lt "public data:" &lt&lt " ";
+        if (isSummary)
+        <a href = javascript:toggle_visibility('62');>{</a><div id=62>
+          out &lt&lt datum.package_ &lt&lt " : " &lt&lt datum.line_ &lt&lt " - "
+            &lt&lt pNode-&gttype_ &lt&lt " " &lt&lt pNode-&gtname_ &lt&lt "\n " &lt&lt std::setw(15) &lt&lt " ";
+        }</div>
+        out &lt&lt showData(datum.pTc);
+        Rslt::write(out.str());
+      }</div>
+    }</div>
+  }</div>
+}</div>
+//----&lt  helper for displayMetrics() &gt-------------------------------
+/*
+* - Breaking this out as a separate function allows application to
+*   display metrics for a subset of the Abstract Syntax Tree
+*/
+void CodeAnalysisExecutive::displayMetrics(ASTNode* root)
+<a href = javascript:toggle_visibility('63');>{</a><div id=63>
+  flushLogger();
+  std::ostringstream out;
+  out &lt&lt "Code Metrics - Start Line, Size (lines/code), and Complexity (number of scopes)";
+  Utils::sTitle(out.str(), 3, 92, out, '=');
+  out &lt&lt "\n";
+  Rslt::write(out.str());
+
+  std::function&ltvoid(ASTNode* pNode)&gt co = [&](ASTNode* pNode) <a href = javascript:toggle_visibility('64');>{</a><div id=64>
+    if (
+      pNode-&gttype_ == "namespace" ||
+      pNode-&gttype_ == "function" ||
+      pNode-&gttype_ == "class" ||
+      pNode-&gttype_ == "interface" ||
+      pNode-&gttype_ == "struct" ||
+      pNode-&gttype_ == "lambda"
+      )
+      fileNodes_.push_back(std::pair&ltFile, ASTNode*&gt(pNode-&gtpackage_, pNode));
+  }</div>;
+  ASTWalkNoIndent(root, co);
+  std::stable_sort(fileNodes_.begin(), fileNodes_.end(), CompExts());
+  std::stable_sort(fileNodes_.begin(), fileNodes_.end(), CompNames());
+
+  displayHeader();
+
+  std::string prevFile;
+  for (auto item : fileNodes_)
+  <a href = javascript:toggle_visibility('65');>{</a><div id=65>
+    if (item.first != prevFile)
+    <a href = javascript:toggle_visibility('66');>{</a><div id=66>
+      Rslt::write("\n");
+      displayHeader();
+    }</div>
+    displayMetricsLine(item.first, item.second);
+    displayDataLines(item.second);
+    prevFile = item.first;
+  }</div>
+  Rslt::write("\n");
+}</div>
+//----&lt display metrics results of code analysis &gt---------------
+
+void CodeAnalysisExecutive::displayMetrics()
+<a href = javascript:toggle_visibility('67');>{</a><div id=67>
+  ASTNode* pGlobalScope = pRepo_-&gtgetGlobalScope();
+  displayMetrics(pGlobalScope);
+}</div>
+//----&lt walk tree of element nodes &gt---------------------------------
+
+template&lttypename element&gt
+void TreeWalk(element* pItem, bool details = false)
+<a href = javascript:toggle_visibility('68');>{</a><div id=68>
+  static std::string path;
+  if (path != pItem-&gtpath_ && details == true)
+  <a href = javascript:toggle_visibility('69');>{</a><div id=69>
+    path = pItem-&gtpath_;
+    Rslt::write("\n" + path);
+  }</div>
+  static size_t indentLevel = 0;
+  std::ostringstream out;
+  out &lt&lt "\n  " &lt&lt std::string(2 * indentLevel, ' ') &lt&lt pItem-&gtshow();
+  Rslt::write(out.str());
+  auto iter = pItem-&gtchildren_.begin();
+  ++indentLevel;
+  while (iter != pItem-&gtchildren_.end())
+  <a href = javascript:toggle_visibility('70');>{</a><div id=70>
+    TreeWalk(*iter);
+    ++iter;
+  }</div>
+  --indentLevel;
+}</div>
+//----&lt display the AbstrSynTree build in processSourceCode() &gt------
+
+void CodeAnalysisExecutive::displayAST()
+<a href = javascript:toggle_visibility('71');>{</a><div id=71>
+  flushLogger();
+  ASTNode* pGlobalScope = pRepo_-&gtgetGlobalScope();
+  Utils::title("Abstract Syntax Tree");
+  TreeWalk(pGlobalScope);
+  Rslt::write("\n");
+}</div>
+//----&lt show functions with metrics exceeding specified limits &gt-----
+
+void CodeAnalysisExecutive::displayMetricSummary(size_t sMax, size_t cMax)
+<a href = javascript:toggle_visibility('72');>{</a><div id=72>
+  flushLogger();
+  std::ostringstream out;
+  Utils::sTitle("Functions Exceeding Metric Limits and Public Data", 3, 92, out, '=');
+  Rslt::write(out.str());
+  displayHeader();
+
+  if (fileNodes_.size() == 0)  // only build fileNodes_ if displayMetrics hasn't been called
+  <a href = javascript:toggle_visibility('73');>{</a><div id=73>
+    std::function&ltvoid(ASTNode* pNode)&gt co = [&](ASTNode* pNode) <a href = javascript:toggle_visibility('74');>{</a><div id=74>
+      fileNodes_.push_back(std::pair&ltFile, ASTNode*&gt(pNode-&gtpackage_, pNode));
+    }</div>;
+    ASTNode* pGlobalNamespace = pRepo_-&gtgetGlobalScope();
+    ASTWalkNoIndent(pGlobalNamespace, co);
+    std::stable_sort(fileNodes_.begin(), fileNodes_.end(), CompExts());
+    std::stable_sort(fileNodes_.begin(), fileNodes_.end(), CompNames());
+  }</div>
+  for (auto item : fileNodes_)
+  <a href = javascript:toggle_visibility('75');>{</a><div id=75>
+    if (item.second-&gttype_ == "function")
+    <a href = javascript:toggle_visibility('76');>{</a><div id=76>
+      size_t size = item.second-&gtendLineCount_ - item.second-&gtstartLineCount_ + 1;
+      size_t cmpl = item.second-&gtcomplexity_;
+      if (size &gt sMax || cmpl &gt cMax)
+        displayMetricsLine(item.first, item.second);
+    }</div>
+  }</div>
+  Rslt::write("\n");
+  for (auto item : fileNodes_)
+  <a href = javascript:toggle_visibility('77');>{</a><div id=77>
+    displayDataLines(item.second, true);
+  }</div>
+  Rslt::write("\n");
+}</div>
+//----&lt comparison functor for sorting SLOC display &gt----------------
+
+struct compFiles
+<a href = javascript:toggle_visibility('78');>{</a><div id=78>
+private:
+  std::string ChangeFirstCharOfExt(const std::string& fileName) const
+  <a href = javascript:toggle_visibility('79');>{</a><div id=79>
+    std::string temp = fileName;
+    size_t pos = temp.find_last_of('.');
+    if (pos &lt temp.size() - 1)
+      if (temp[pos + 1] == 'h')
+        temp[pos + 1] = 'a';
+    return temp;
+  }</div>
+public:
+  bool operator()(const std::string& fileName1, const std::string& fileName2) const
+  <a href = javascript:toggle_visibility('80');>{</a><div id=80>
+    return ChangeFirstCharOfExt(fileName1) &lt ChangeFirstCharOfExt(fileName2);
+  }</div>
+}</div>;
+//----&lt show sizes of all the files processed &gt----------------------
+
+void CodeAnalysisExecutive::displaySlocs()
+<a href = javascript:toggle_visibility('81');>{</a><div id=81>
+  flushLogger();
+  Utils::sTitle("File Size - Source Lines of Code", 3, 92);
+  size_t slocCount = 0;
+  std::map&ltstd::string, size_t, compFiles&gt fileColl;
+  for (auto item : fileMap_)
+  <a href = javascript:toggle_visibility('82');>{</a><div id=82>
+    for (auto file : item.second)
+    <a href = javascript:toggle_visibility('83');>{</a><div id=83>
+      File fileName = FileSystem::Path::getName(file);
+      fileColl[file] = slocMap_[fileName];
+    }</div>
+  }</div>
+  for (auto fitem : fileColl)
+  <a href = javascript:toggle_visibility('84');>{</a><div id=84>
+    std::ostringstream out;
+    out &lt&lt "\n  " &lt&lt std::setw(8) &lt&lt fitem.second &lt&lt " : " &lt&lt fitem.first;
+    Rslt::write(out.str());
+    slocCount += fitem.second;
+  }</div>
+  std::ostringstream out;
+  out &lt&lt "\n\n      Total line count = " &lt&lt slocCount &lt&lt "\n";
+  Rslt::write(out.str());
+  Rslt::write("\n");
+}</div>
+//----&lt display analysis info based on command line options &gt--------
+
+void CodeAnalysisExecutive::dispatchOptionalDisplays()
+<a href = javascript:toggle_visibility('85');>{</a><div id=85>
+  for (auto opt : options_)
+  <a href = javascript:toggle_visibility('86');>{</a><div id=86>
+    switch (opt)
+    <a href = javascript:toggle_visibility('87');>{</a><div id=87>
+    case 'm':
+      displayMetrics();
+      Rslt::start();
+      break;
+    case 'a':
+      displayAST();
+      Rslt::start();
+      break;
+    case 's':
+      displaySlocs();
+      Rslt::start();
+      break;
+    default:
+      break;
+    }</div>
+  }</div>
+}</div>
+//----&lt display analysis info based on command line options &gt--------
+
+void CodeAnalysisExecutive::setDisplayModes()
+<a href = javascript:toggle_visibility('88');>{</a><div id=88>
+  for (auto opt : options_)
+  <a href = javascript:toggle_visibility('89');>{</a><div id=89>
+    switch (opt)
+    <a href = javascript:toggle_visibility('90');>{</a><div id=90>
+    case 'r':
+      Rslt::start();
+      break;
+    case 'd':
+      Demo::start();
+      break;
+    case 'b':
+      Dbug::start();
+      break;
+    case 'f':
+      setLogFile("logFile.txt");
+      break;
+    default:
+      if (opt != 'a' && opt != 'b' && opt != 'd' && opt != 'f' && opt != 'm' && opt != 'r' && opt != 's')
+      <a href = javascript:toggle_visibility('91');>{</a><div id=91>
+        std::cout &lt&lt "\n\n  unknown option " &lt&lt opt &lt&lt "\n\n";
+      }</div>
+    }</div>
+  }</div>
+}</div>
+//----&lt helper functions for managing application's logging &gt--------
+
+void CodeAnalysisExecutive::startLogger(std::ostream& out)
+<a href = javascript:toggle_visibility('92');>{</a><div id=92>
+  Rslt::attach(&out);
+  Demo::attach(&out);
+  Dbug::attach(&out);
+
+  // will start Demo and Dbug if  have options /d and /b
+
+  setDisplayModes();
+}</div>
+
+void CodeAnalysisExecutive::flushLogger()
+<a href = javascript:toggle_visibility('93');>{</a><div id=93>
+  Rslt::flush();
+  Demo::flush();
+  Dbug::flush();
+}</div>
+
+void CodeAnalysisExecutive::stopLogger()
+<a href = javascript:toggle_visibility('94');>{</a><div id=94>
+  Rslt::flush();
+  Demo::flush();
+  Dbug::flush();
+  Rslt::stop();
+  Demo::stop();
+  Dbug::stop();
+}</div>
+//----&lt open file stream for logging &gt-------------------------------
+/*
+*  - must come after CodeAnalysisExecutive::processCommandLine()
+*  - must come before starting any of the loggers
+*/
+void CodeAnalysisExecutive::setLogFile(const File& file)
+<a href = javascript:toggle_visibility('95');>{</a><div id=95>
+  std::string path = getAnalysisPath();
+  path += "\\" + file;
+  pLogStrm_ = new std::ofstream(path);
+  if (pLogStrm_-&gtgood())
+  <a href = javascript:toggle_visibility('96');>{</a><div id=96>
+    Rslt::attach(pLogStrm_);
+    Demo::attach(pLogStrm_);
+    Dbug::attach(pLogStrm_);
+  }</div>
+  else
+    Rslt::write("\n  couldn't open logFile.txt for writing");
+}</div>
+
+std::string CodeAnalysisExecutive::systemTime()
+<a href = javascript:toggle_visibility('97');>{</a><div id=97> 
+  time_t sysTime = time(&sysTime);
+  char buffer[27];
+  ctime_s(buffer, 27, &sysTime);
+  buffer[24] = '\0';
+  std::string temp(buffer);
+  return temp;
+}</div>
+//----&lt conduct code analysis &gt--------------------------------------
+//#ifdef DEBUG
+
+
+
+#include &ltfstream&gt
+
+int main(int argc, char* argv[])
+<a href = javascript:toggle_visibility('98');>{</a><div id=98>
+  using namespace CodeAnalysis;
+
+  CodeAnalysisExecutive exec;
+
+  try <a href = javascript:toggle_visibility('99');>{</a><div id=99>
+    bool succeeded = exec.ProcessCommandLine(argc, argv);
+    if (!succeeded)
+    <a href = javascript:toggle_visibility('100');>{</a><div id=100>
+      return 1;
+    }</div>
+    exec.setDisplayModes();
+    exec.startLogger(std::cout);
+
+    std::ostringstream tOut("CodeAnalysis - Version 1.4");
+    Utils::sTitle(tOut.str(), 3, 92, tOut, '=');
+    Rslt::write(tOut.str());
+
+    Rslt::write("\n     " + exec.systemTime());
+    Rslt::flush();
+    exec.showCommandLineArguments(argc, argv);
+    Rslt::write("\n");
+
+    exec.getSourceFiles();
+    exec.processSourceCode(true);
+    exec.complexityAnalysis();
+    exec.dispatchOptionalDisplays();
+    exec.flushLogger();
+    exec.displayMetricSummary(50,10);
+
+    exec.flushLogger();
+    Rslt::write("\n");
+    std::ostringstream out;
+    out &lt&lt "\n  " &lt&lt std::setw(10) &lt&lt "searched" &lt&lt std::setw(6) &lt&lt exec.numDirs() &lt&lt " dirs";
+    out &lt&lt "\n  " &lt&lt std::setw(10) &lt&lt "processed" &lt&lt std::setw(6) &lt&lt exec.numFiles() &lt&lt " files";
+    Rslt::write(out.str());
+    Rslt::write("\n");
+    exec.stopLogger();
+    std::cout &lt&lt "\n  Code Analysis completed";
+
+
+
+    TypeAnal ta;
+	TypeTable type;
+	type=ta.doTypeAnal();
+	ta.AnalyseDependency(argv[argc - 1]);	
+	
+
+  }</div>
+  catch (std::exception& except)
+  <a href = javascript:toggle_visibility('101');>{</a><div id=101>
+    exec.flushLogger();
+    std::cout &lt&lt "\n\n  caught exception in Executive::main: " + std::string(except.what()) + "\n\n";
+    exec.stopLogger();
+    return 1;
+  }</div>
+  return 0;
+}</div>
+//#endif // DEBUG</pre></body></html>

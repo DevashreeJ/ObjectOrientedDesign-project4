@@ -1,0 +1,201 @@
+#pragma once
+
+///////////////////////////////////////////////////////////////////////////
+// DependencyAnalysis.h- To demonstrate code for generating 
+// dependency table																		
+// Author: Devashree Jadhav		SUID: 244997526		       
+///////////////////////////////////////////////////////////////////////////
+/*
+* Operations:
+* -------------------
+* This file is created to create the dependency analysis table
+* getDepTable()= funtion to get dependency table as an unordered map
+* 
+*1) createDependencyTable () - Creates a dependency table by using the type table. Saves elements in db.
+*2) dependencyPersistance () - Saves Db to XML file and prints the same. 
+*
+* Required Files:
+* ---------------
+* AbstrSynTree.h, NoSqlDb.h, TypeTable.h
+*
+* Maintenance History:
+* --------------------
+* Ver 1.0 : March 12, 2017
+* - first release
+*/
+
+
+#include &ltunordered_map&gt
+#include &ltiostream&gt
+#include &ltstring&gt
+#include &ltsstream&gt
+#include &ltiomanip&gt
+#include &ltutility&gt
+#include &ltclocale&gt
+#include &ltlocale&gt
+#include &ltset&gt
+
+#include"../Parser/ActionsAndRules.h"
+#include"../TypeAnalysis/TypeTable.h"
+#include"../Tokenizer/Tokenizer.h"
+#include"../Persistance/Persistance.h"
+#include "../NoSqlDb/NoSqlDb.h"
+#include "../CodePublisher/CodePublisher.h"	
+
+#pragma warning (disable : 4101)  // disable warning re unused variable x, below
+
+using namespace NoSQLDB;
+using namespace CodeAnalysis;
+using namespace Scanner;
+
+using StrData = std::string;
+
+
+using SPtr = std::shared_ptr&ltASTNode*&gt;
+	class Dependence_class
+	{
+	
+	private:
+		std::unordered_map&ltstd::string,std::set&ltstd::string&gt&gt depTable;
+		std::unordered_map&ltstd::string,std::pair&ltstd::string,std::string&gt&gt tempTypeTable;
+		std::set&ltstd::string&gt tempfiles;
+		NoSqlDb&ltStrData&gt db2;
+		Element&ltStrData&gt element;
+		AbstrSynTree& ASTref_;
+		TypeTable table;
+		Publish codepub;
+
+	public:
+
+		Dependence_class();
+		std::unordered_map&ltstd::string, std::set&ltstd::string&gt&gt& getDepTable()
+		{
+			return depTable;
+		}
+		void createDependencyTable(TypeTable& t, std::string fileName);
+		
+		void  dependencyPersistance(std::string);
+		void  callCodePublisher();
+
+	};
+
+	
+	inline  Dependence_class::Dependence_class():ASTref_(Repository::getInstance()-&gtAST())
+	{
+	}
+
+
+	inline void Dependence_class::dependencyPersistance(std::string xmlFilename)
+	{
+
+
+		std::ofstream file;
+
+		file.open(xmlFilename);
+		XmlNamespace::Persistance p;		 
+		file &lt&lt p.toXml(db2);
+		
+		file.close();
+
+	}
+	
+	inline void Dependence_class::createDependencyTable(TypeTable& t, std::string fileName)
+	{
+
+		tempTypeTable = t.getTable();	
+		if (fileName != "") {
+			static std::string path = "";
+			try {
+				std::ifstream in(fileName);
+				if (!in.good())
+				{
+					std::cout &lt&lt "can't open";
+				}
+				else
+				{
+					Toker toker;
+					toker.returnComments();	toker.attach(&in);
+
+					do
+					{
+						std::string tok = toker.getTok();
+
+						for (auto tt : tempTypeTable) {
+							if (tok == tt.first) {
+
+								tempfiles.insert(tt.second.second);
+								//		std::cout &lt&lt"\n"&lt&lt std::setw(55) &lt&lt fileName &lt&lt std::setw(55) &lt&lt tt.second.second &lt&lt "\n";
+							}
+						}
+
+					} while (in.good());
+					element.name = fileName;
+					while (!element.Children.empty())
+					{
+						element.Children.pop_back();
+					}
+					for (auto iter = tempfiles.begin(); iter != tempfiles.end(); ++iter) {
+						element.Children.push_back(*iter);
+						//std::cout &lt&lt *iter;
+					}
+					db2.save(fileName, element);
+					depTable.insert(std::make_pair(fileName, tempfiles));
+				}
+
+				std::cout &lt&lt std::endl;
+				std::cout &lt&lt std::setw(60) &lt&lt std::left &lt&lt fileName &lt&lt "\t---Dependent on----\t ";
+				for (auto it = depTable[fileName].begin(); it != depTable[fileName].end(); ++it) {
+					std::cout &lt&lt std::endl;
+					std::cout &lt&lt std::setw(150) &lt&lt " " &lt&lt *it &lt&lt "\n";
+				}
+			}
+				catch (std::logic_error& ex)
+				{
+					std::cout &lt&lt "\n  " &lt&lt ex.what();
+				}
+				std::cout &lt&lt "\n\n";
+			}
+						
+	}
+
+	inline void	Dependence_class::callCodePublisher()
+	{
+		codepub.makeHtmFiles(depTable);
+		codepub.dependencyMapping();
+		//codepub.showTable();
+	}
+
+
+
+
+
+	
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	
+
+
+	
+	
+

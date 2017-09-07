@@ -1,0 +1,58 @@
+<html><head><link rel=stylesheet type=text/css href=../styleFile.css><script src=../scriptFile.js></script><body><h3>TypeTable.h.htm</h3><hr/><div class ="indent"><h4>Dependencies:</h4><br><a href =../ResultFolder/CodePublisher.h.htm>CodePublisher.h</a><br><br><a href =../ResultFolder/DepAnal.h.htm>DepAnal.h</a><br><br><a href =../ResultFolder/DependencyAnalysis.h.htm>DependencyAnalysis.h</a><br><br><a href =../ResultFolder/Executive.cpp.htm>Executive.cpp</a><br><br><a href =../ResultFolder/Executive.h.htm>Executive.h</a><br><br><a href =../ResultFolder/Logger.cpp.htm>Logger.cpp</a><br><br><a href =../ResultFolder/Logger.h.htm>Logger.h</a><br><br><a href =../ResultFolder/Sockets.cpp.htm>Sockets.cpp</a><br><br><a href =../ResultFolder/Sockets.h.htm>Sockets.h</a><br><br><a href =../ResultFolder/TypeTable.h.htm>TypeTable.h</a><br></div><hr/><pre>#pragma once
+#pragma once
+#include&ltunordered_map&gt
+#include"../AbstractSyntaxTree/AbstrSynTree.h"
+
+///////////////////////////////////////////////////////////////////////////
+// TypeTable.h- To demonstrate code for generating type table																		
+// Author: Devashree Jadhav		SUID:244997526		       						 
+///////////////////////////////////////////////////////////////////////////
+/*
+* Operations:
+* -------------------
+* This file is created to create the type table
+* insertTypeTable()= funtion to insert data into the type table
+* Required Files:
+* ---------------
+* AbstrSynTree.h
+*
+* Maintenance History:
+* --------------------
+* Ver 1.0 : March 12, 2017
+* - first release
+*/
+
+
+#pragma warning (disable : 4101)  // disable warning re unused variable x, below
+
+class TypeTable
+<a href = javascript:toggle_visibility('0');>{</a><div id=0>
+private:
+	std::unordered_map&ltstd::string, std::pair&ltstd::string, std::string&gt&gt typetable;
+
+public:
+
+	std::unordered_map&ltstd::string, std::pair&ltstd::string, std::string&gt&gt& getTable()
+	<a href = javascript:toggle_visibility('1');>{</a><div id=1>
+		return typetable;
+	}</div>
+
+	void setvalue(std::unordered_map&ltstd::string, std::pair&ltstd::string, std::string&gt&gt &table)
+	<a href = javascript:toggle_visibility('2');>{</a><div id=2>
+		this-&gttypetable = table;
+	}</div>
+	void insertIntoTable(CodeAnalysis::ASTNode* pNode);
+}</div>;
+
+inline void  TypeTable::insertIntoTable(CodeAnalysis::ASTNode* pNode)
+<a href = javascript:toggle_visibility('3');>{</a><div id=3>
+	if (pNode-&gttype_ == "class" || pNode-&gttype_ == "enum" || pNode-&gttype_ == "struct" || pNode-&gttype_ == "typedef" || pNode-&gttype_ == "using")
+	<a href = javascript:toggle_visibility('4');>{</a><div id=4>
+		std::pair&ltstd::string, std::string&gt temp;
+		temp.first = pNode-&gttype_;
+		temp.second = pNode-&gtpackage_;
+		typetable.insert(std::make_pair(pNode-&gtname_, temp));
+	}</div>
+}</div>
+
+</pre></body></html>

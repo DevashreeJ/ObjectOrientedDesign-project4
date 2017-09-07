@@ -1,0 +1,19 @@
+﻿  AbstrSynTree.cpp
+  DependencyAnalysis.cpp
+  FileMgr.cpp
+  FileSystem.cpp
+  GrammarHelpers.cpp
+  Logger.cpp
+  NoSqlDb.cpp
+  ActionsAndRules.cpp
+  ConfigureParser.cpp
+  Parser.cpp
+  ScopeStack.cpp
+  SemiExp.cpp
+  Tokenizer.cpp
+  TypeTable.cpp
+  Utilities.cpp
+  XmlElement.cpp
+  DepAnal.cpp
+  Executive.cpp
+  Executive.vcxproj -> C:\Users\devas\OneDrive\Documents\Visual Studio 2015\Projects\mera_pr4\proj_4\x64\Release\CodeAnalyzer.lib

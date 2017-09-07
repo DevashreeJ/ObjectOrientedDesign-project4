@@ -1,0 +1,320 @@
+///////////////////////////////////////////////////////////////////
+// XmlElement.cpp - define XML Element types                     //
+// ver 1.4                                                       //
+// Application: Help for CSE687 Pr#2, Spring 2015                //
+// Platform:    Dell XPS 2720, Win 8.1 Pro, Visual Studio 2013   //
+// Author:      Jim Fawcett, CST 4-187, 443-3948                 //
+//              jfawcett@twcny.rr.com                            //
+///////////////////////////////////////////////////////////////////
+
+#include "XmlElement.h"
+#include &ltiostream&gt
+
+using namespace XmlProcessing;
+
+size_t AbstractXmlElement::count = 0;
+size_t AbstractXmlElement::tabSize = 2;
+
+//----&lt factory for doc elements &gt----------------------------------------
+
+std::shared_ptr&ltAbstractXmlElement&gt XmlProcessing::makeDocElement(std::shared_ptr&ltAbstractXmlElement&gt pRoot)
+{
+  std::shared_ptr&ltAbstractXmlElement&gt ptr(new DocElement(pRoot));
+  return ptr;
+}
+
+//----&lt factory for tagged elements &gt----------------------------------------
+
+std::shared_ptr&ltAbstractXmlElement&gt XmlProcessing::makeTaggedElement(const std::string& tag)
+{
+  std::shared_ptr&ltAbstractXmlElement&gt ptr(new TaggedElement(tag));
+  return ptr;
+}
+//----&lt factory for text elements &gt------------------------------------------
+
+std::shared_ptr&ltAbstractXmlElement&gt XmlProcessing::makeTextElement(const std::string& text)
+{
+  std::shared_ptr&ltAbstractXmlElement&gt ptr(new TextElement(text));
+  return ptr;
+}
+//----&lt factory for comment elements &gt---------------------------------------
+
+std::shared_ptr&ltAbstractXmlElement&gt XmlProcessing::makeCommentElement(const std::string& text)
+{
+  std::shared_ptr&ltAbstractXmlElement&gt ptr(new CommentElement(text));
+  return ptr;
+}
+//----&lt factory for processing instruction elements &gt------------------------
+
+std::shared_ptr&ltAbstractXmlElement&gt XmlProcessing::makeProcInstrElement(const std::string& text)
+{
+  std::shared_ptr&ltAbstractXmlElement&gt ptr(new ProcInstrElement(text));
+  return ptr;
+}
+//----&lt factory for XML Declaration elements &gt-------------------------------
+
+std::shared_ptr&ltAbstractXmlElement&gt XmlProcessing::makeXmlDeclarElement()
+{
+  std::shared_ptr&ltAbstractXmlElement&gt ptr(new XmlDeclarElement());
+  return ptr;
+}
+//----&lt doc element constructor and destructor &gt-----------------------------
+
+DocElement::DocElement(std::shared_ptr&ltAbstractXmlElement&gt pRoot) 
+{
+  std::shared_ptr&ltAbstractXmlElement&gt pDecl = makeXmlDeclarElement();
+  pDecl-&gtaddAttrib("version", "1.0");
+  children_.push_back(pDecl);
+  if (pRoot != nullptr)
+    children_.push_back(pRoot);
+}
+//----&lt private helper for DocElement::addChild(...) &gt-----------------------
+
+bool DocElement::hasXmlRoot()
+{
+  for (auto pElement : children_)
+  {
+    if (dynamic_cast&ltTaggedElement*&gt(pElement.get()) != nullptr)
+      return true;
+  }
+  return false;
+}
+//----&lt add only one child to doc element using pointer to child &gt-----------
+
+bool DocElement::addChild(std::shared_ptr&ltAbstractXmlElement&gt pChild)
+{
+  // don't add TextElements
+  TextElement* pTxEl = dynamic_cast&ltTextElement*&gt(pChild.get());
+  if (pTxEl != 0)  // don't add text elements to DocElement
+    return false;
+
+  // don't add another DocElement
+  DocElement* pDcEl = dynamic_cast&ltDocElement*&gt(pChild.get());
+  if (pDcEl != 0)  // don't add text elements to DocElement
+    return false;
+
+  // add ProcInstrElements and CommentElements 
+  TaggedElement* te = dynamic_cast&ltTaggedElement*&gt(pChild.get());
+  if (te == nullptr) // is not a TaggedElement
+  {
+    children_.push_back(pChild);
+    return true;
+  }
+
+  // add only one TaggedElement
+  if (!hasXmlRoot())
+  {
+    children_.push_back(pChild);
+    return true;
+  }
+  return false;
+}
+//----&lt remove child from doc element using pointer to child &gt---------------
+
+bool DocElement::removeChild(std::shared_ptr&ltAbstractXmlElement&gt pChild)
+{
+  auto iter = std::find(begin(children_), end(children_), pChild);
+  if (iter != end(children_))
+  {
+    children_.erase(iter);
+    return true;
+  }
+  return false;
+}
+//----&lt return value = tag from doc element &gt-----------------------------
+
+std::string DocElement::value() { return std::string(""); }
+
+//----&lt generate xml string for tagged element &gt-----------------------------
+
+std::string DocElement::toString()
+{
+  std::string rtn;
+  for (auto elem : children_)
+    rtn += elem-&gttoString();
+  return rtn;
+}
+//----&lt add child to tagged element using pointer to child &gt-----------------
+
+bool TaggedElement::addChild(std::shared_ptr&ltAbstractXmlElement&gt pChild)
+{
+  children_.push_back(pChild);
+  return true;
+}
+//----&lt remove child from tagged element using pointer to child &gt------------
+
+bool TaggedElement::removeChild(std::shared_ptr&ltAbstractXmlElement&gt pChild)
+{
+  auto iter = std::find(begin(children_), end(children_), pChild);
+  if (iter != end(children_))
+  {
+    children_.erase(iter);
+    return true;
+  }
+  return false;
+}
+//----&lt remove child from tagged element using child's value &gt---------------
+
+bool TaggedElement::removeChild(const std::string& value)
+{
+  for (auto iter = begin(children_); iter != end(children_); ++iter)
+  {
+    if ((*iter)-&gtvalue() == value)
+    {
+      children_.erase(iter);
+      return true;
+    }
+  }
+  return false;
+}
+//----&lt add attribute to tagged element &gt------------------------------------
+
+bool TaggedElement::addAttrib(const std::string& name, const std::string& value)
+{
+  std::pair&ltstd::string, std::string&gt atPair(name, value);
+  attribs_.push_back(atPair);
+  return true;
+}
+//----&lt remove attribute from tagged element &gt-------------------------------
+
+bool TaggedElement::removeAttrib(const std::string& name)
+{
+  for (auto iter = begin(attribs_); iter != end(attribs_); ++iter)
+  {
+    if (iter-&gtfirst == name)
+    {
+      attribs_.erase(iter);
+      return true;
+    }
+  }
+  return false;
+}
+//----&lt return value = tag from tagged element &gt-----------------------------
+
+std::string TaggedElement::value() { return tag_; }
+
+//----&lt generate xml string for tagged element &gt-----------------------------
+
+std::string TaggedElement::toString()
+{
+  std::string spacer(tabSize*++count, ' ');
+  std::string xml = "\n" + spacer + "&lt" + tag_;
+  for (auto at : attribs_)
+  {
+    xml += " ";
+    xml += at.first;
+    xml += "=\"";
+    xml += at.second;
+    xml += "\"";
+  }
+  xml += "&gt";
+  for (auto pChild : children_)
+    xml += pChild-&gttoString();
+  xml += "\n" + spacer + "&lt/" + tag_ + "&gt";
+  --count;
+  return xml;
+}
+//----&lt generate xml string for text element &gt-------------------------------
+
+std::string TextElement::toString()
+{
+  std::string spacer(tabSize * ++count, ' ');
+  std::string xml = "\n" + spacer + text_;
+  --count;
+  return xml;
+}
+//----&lt add attribute to ProcInstElement &gt-----------------------------------
+
+bool ProcInstrElement::addAttrib(const std::string& name, const std::string& value)
+{
+  std::pair&ltstd::string, std::string&gt atPair(name, value);
+  attribs_.push_back(atPair);
+  return true;
+}
+//----&lt remove attribute from ProcInstElement &gt------------------------------
+
+bool ProcInstrElement::removeAttrib(const std::string& name)
+{
+  for (auto iter = begin(attribs_); iter != end(attribs_); ++iter)
+  {
+    if (iter-&gtfirst == name)
+    {
+      attribs_.erase(iter);
+      return true;
+    }
+  }
+  return false;
+}
+//----&lt generate xml string for text element &gt-------------------------------
+
+std::string XmlDeclarElement::toString()
+{
+  std::string spacer(tabSize * ++count, ' ');
+  std::string xml = "\n" + spacer + "&lt?xml";
+  for (auto at : attribs_)
+  {
+    xml += " ";
+    xml += at.first;
+    xml += "=\"";
+    xml += at.second;
+    xml += "\"";
+  }
+  xml += "&gt";
+  --count;
+  return xml;
+}
+//----&lt add attribute to ProcInstElement &gt-----------------------------------
+
+bool XmlDeclarElement::addAttrib(const std::string& name, const std::string& value)
+{
+  std::pair&ltstd::string, std::string&gt atPair(name, value);
+  attribs_.push_back(atPair);
+  return true;
+}
+//----&lt remove attribute from ProcInstElement &gt------------------------------
+
+bool XmlDeclarElement::removeAttrib(const std::string& name)
+{
+  for (auto iter = begin(attribs_); iter != end(attribs_); ++iter)
+  {
+    if (iter-&gtfirst == name)
+    {
+      attribs_.erase(iter);
+      return true;
+    }
+  }
+  return false;
+}
+//----&lt helper function displays titles &gt------------------------------------
+
+void XmlProcessing::title(const std::string& title, char underlineChar)
+{
+  std::cout &lt&lt "\n  " &lt&lt title;
+  std::cout &lt&lt "\n " &lt&lt std::string(title.size() + 2, underlineChar);
+}
+
+//----&lt test stub &gt----------------------------------------------------------
+
+#ifdef TEST_XMLELEMENT
+
+int main()
+{
+  title("Testing XmlElement Package", '=');
+  std::cout &lt&lt "\n";
+
+  using sPtr = std::shared_ptr &lt AbstractXmlElement &gt ;
+
+  sPtr root = makeTaggedElement("root");
+  root-&gtaddChild(makeTextElement("this is a test"));
+
+  sPtr child = makeTaggedElement("child");
+  child-&gtaddChild(makeTextElement("this is another test"));
+  child-&gtaddAttrib("first", "test");
+  root-&gtaddChild(child);
+
+  sPtr docEl = makeDocElement(root);
+  std::cout &lt&lt "  " &lt&lt docEl-&gttoString();
+  std::cout &lt&lt "\n\n";
+}
+
+#endif

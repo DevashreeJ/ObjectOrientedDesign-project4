@@ -1,0 +1,162 @@
+<html><head><link rel=stylesheet type=text/css href=../styleFile.css><script src=../scriptFile.js></script><body><h3>DepAnal.h.htm</h3><hr/><div class ="indent"><h4>Dependencies:</h4><br><a href =../ResultFolder/CodePublisher.h.htm>CodePublisher.h</a><br><br><a href =../ResultFolder/DepAnal.h.htm>DepAnal.h</a><br><br><a href =../ResultFolder/DependencyAnalysis.h.htm>DependencyAnalysis.h</a><br><br><a href =../ResultFolder/Executive.cpp.htm>Executive.cpp</a><br><br><a href =../ResultFolder/Executive.h.htm>Executive.h</a><br><br><a href =../ResultFolder/Logger.cpp.htm>Logger.cpp</a><br><br><a href =../ResultFolder/Logger.h.htm>Logger.h</a><br><br><a href =../ResultFolder/Sockets.cpp.htm>Sockets.cpp</a><br><br><a href =../ResultFolder/Sockets.h.htm>Sockets.h</a><br><br><a href =../ResultFolder/TypeTable.h.htm>TypeTable.h</a><br></div><hr/><pre>/////////////////////////////////////////////////////////////////////////
+// DepAnal.h - Demonstrate how to start developing dependency analyzer //
+//                                                                     //
+// Author: Jim Fawcett, CSE687 - Object Oriented Design, Spring 2017   //
+// Used by: Devashree Jadhav 		SUID: 244997526		       //
+/////////////////////////////////////////////////////////////////////////
+/*
+* Operations:
+* -------------------
+* This file is created to design the functions that generate the TypeTable and the Dependency Table
+* DFS()= runs depth first search on the AST and generates the TypeTable
+* doTypeAnal()= base function to call DFS()
+* AnalyseDependency()= Takes arguments for xml file name and performs the following functions : 
+					1) Creates dependency table.
+					2) Checks the argument for xml file 
+					3) Displays dependency table
+					4) Creates Persistance file and store it to XML
+* Required Files:
+* ---------------
+* ActionsAndRules.h, DependencyAnalysis.h,
+* TypeTable.h, Display.h
+*
+* Maintenance History:
+* --------------------
+* Ver 1.0 : March 12, 2017
+* - first release
+*/
+
+
+
+
+#pragma once
+
+#include "../Parser/ActionsAndRules.h"
+#include"../TypeAnalysis/TypeTable.h"
+#include"../DependencyAnalysis/DependencyAnalysis.h"
+
+#include &ltiostream&gt
+#include &ltfunctional&gt
+#include&ltset&gt
+
+#pragma warning (disable : 4101)  // disable warning re unused variable x, below
+
+using namespace NoSQLDB;
+
+namespace CodeAnalysis
+<a href = javascript:toggle_visibility('0');>{</a><div id=0>
+	class TypeAnal
+	<a href = javascript:toggle_visibility('1');>{</a><div id=1>
+
+	private:
+		void DFS(ASTNode* pNode);
+		//void DeapthFS(ASTNode* pNode);
+		TypeTable table;
+		AbstrSynTree& ASTref_;
+		ScopeStack&ltASTNode*&gt scopeStack_;
+		Scanner::Toker& toker_;
+		std::unordered_map&ltstd::string, std::pair&ltstd::string, std::string&gt&gttempTable = table.getTable();
+		NoSqlDb&ltstd::string&gt db2;
+
+	public:
+		
+		TypeAnal();
+		TypeTable doTypeAnal();
+		std::set&ltstd::string&gt pathHolder;
+		void AnalyseDependency(std::string s);
+		Dependence_class dc;
+
+	}</div>;
+
+	inline TypeAnal::TypeAnal() :
+		ASTref_(Repository::getInstance()-&gtAST()),
+		scopeStack_(Repository::getInstance()-&gtscopeStack()),
+		toker_(*(Repository::getInstance()-&gtToker()))
+	<a href = javascript:toggle_visibility('2');>{</a><div id=2>
+		std::function&ltvoid()&gt test = [] <a href = javascript:toggle_visibility('3');>{</a><div id=3> int x; }</div>;  // This is here to test detection of lambdas.
+	}</div>                                              // It doesn't do anything useful for dep anal.
+
+	inline bool doDisplay(ASTNode* pNode)
+	<a href = javascript:toggle_visibility('4');>{</a><div id=4>
+		static std::string toDisplay[] = <a href = javascript:toggle_visibility('5');>{</a><div id=5>
+			"function", "lambda", "class", "struct", "enum", "alias", "typedef"
+		}</div>;
+		for (std::string type : toDisplay)
+		<a href = javascript:toggle_visibility('6');>{</a><div id=6>
+			if (pNode-&gttype_ == type)
+				return true;
+		}</div>
+		return false;
+	}</div>
+	inline void TypeAnal::DFS(ASTNode* pNode)
+	<a href = javascript:toggle_visibility('7');>{</a><div id=7>
+		static std::string path = "";
+		if (pNode-&gtpath_ != path)
+		<a href = javascript:toggle_visibility('8');>{</a><div id=8>
+				path = pNode-&gtpath_;
+		}</div>
+		
+		table.insertIntoTable(pNode);
+		pathHolder.insert(pNode-&gtpath_);
+		for (auto pChild : pNode-&gtchildren_)
+			DFS(pChild);
+	}</div>
+
+
+
+	inline TypeTable TypeAnal::doTypeAnal()
+	<a href = javascript:toggle_visibility('9');>{</a><div id=9>
+		
+		ASTNode* pRoot = ASTref_.root();
+		DFS(pRoot);
+		std::cout &lt&lt "\n----------------------------------------------------------------------------------------------------------------------\n";
+		std::cout &lt&lt "\n                                                 TYPE TABLE                                                           \n";
+		std::cout &lt&lt "\n----------------------------------------------------------------------------------------------------------------------\n";
+		std::cout &lt&lt "\nName" &lt&lt std::setw(55) &lt&lt "Type" &lt&lt std::setw(55) &lt&lt "File Name\n";
+		std::cout &lt&lt "------------------------------------------------------------------------------------------------------------------------\n";
+
+		for (auto it = table.getTable().begin(); it != table.getTable().end(); ++it)
+		<a href = javascript:toggle_visibility('10');>{</a><div id=10>
+
+			std::cout &lt&lt it-&gtfirst &lt&lt std::setw(55) &lt&lt it-&gtsecond.first &lt&lt std::setw(55) &lt&lt it-&gtsecond.second &lt&lt "\n";
+			std::cout &lt&lt "\n";
+		}</div>
+
+		return table;
+	}</div>
+
+
+	inline void TypeAnal::AnalyseDependency(std::string xmlName)
+	<a href = javascript:toggle_visibility('11');>{</a><div id=11>
+		
+
+		std::cout &lt&lt "\n ---------------------------------------------------------------------------------------------------------------------------------\n";
+		std::cout &lt&lt "\n                             DISPLAYING DEPENDENCY TABLE                                    \n";
+		std::cout &lt&lt "\n ---------------------------------------------------------------------------------------------------------------------------------\n";
+		
+		auto i = pathHolder.begin();
+		while (i != pathHolder.end())
+		<a href = javascript:toggle_visibility('12');>{</a><div id=12>
+			dc.createDependencyTable(table, *i);
+			++i;
+		}</div>
+		
+	//	dc.callCodePublisher();
+
+		/*std::cout &lt&lt "\n ---------------------------------------------------------------------------------------------------------------------------------\n";
+		std::cout &lt&lt "\n                                         XML Persistance                                   \n";
+		std::cout &lt&lt "\n ---------------------------------------------------------------------------------------------------------------------------------\n";
+
+		if ((xmlName == "") || (xmlName == "*.cpp") || (xmlName == ".*h") || (xmlName == "/m") || (xmlName == "/s") || (xmlName == "/a") || (xmlName == "/r") || (xmlName == "/d") || (xmlName == "/b") || (xmlName == "/f")) <a href = javascript:toggle_visibility('13');>{</a><div id=13>
+			xmlName = "DefaultName.txt";
+		}</div>
+		else
+		<a href = javascript:toggle_visibility('14');>{</a><div id=14>
+			xmlName = xmlName;
+		}</div>
+		dc.dependencyPersistance(xmlName);*/
+
+		dc.callCodePublisher();
+   	}</div>
+}</div>
+</pre></body></html>

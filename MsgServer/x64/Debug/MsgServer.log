@@ -1,0 +1,75 @@
+﻿  MsgServer.cpp
+  XmlElement.cpp
+  XmlDocument.cpp
+  Utilities.cpp
+  TypeTable.cpp
+  Tokenizer.cpp
+  Sockets.cpp
+  SemiExp.cpp
+  Parser.cpp
+  ConfigureParser.cpp
+  ActionsAndRules.cpp
+  Logger.cpp
+  Cpp11-BlockingQueue.cpp
+  HttpMessage.cpp
+  GrammarHelpers.cpp
+  FileSystem.cpp
+  FileMgr.cpp
+  DependencyAnalysis.cpp
+  CodePublisher.cpp
+  Executive.cpp
+  Generating Code...
+  Compiling...
+  DepAnal.cpp
+  AbstrSynTree.cpp
+  Generating Code...
+  MsgServer.vcxproj -> C:\Users\devas\OneDrive\Documents\Visual Studio 2015\Projects\mera_pr4\proj_4\x64\Debug\MsgServer.exe
+  MsgServer.vcxproj -> C:\Users\devas\OneDrive\Documents\Visual Studio 2015\Projects\mera_pr4\proj_4\x64\Debug\MsgServer.pdb (Full PDB)
+  
+  
+    server recvd message with body contents:
+  <msg>Message from client #1</msg>
+  
+    clienthandler thread is terminating
+  
+    server recvd message with body contents:
+  <file>CodePublisher.cpp</file>
+  
+    server recvd message with body contents:
+  <file>DepAnal.cpp</file>
+  
+    server recvd message with body contents:
+  <file>DependencyAnalysis.cpp</file>
+  
+    server recvd message with body contents:
+  <file>Executive.cpp</file>
+  
+    server recvd message with body contents:
+  <file>TypeTable.cpp</file>
+  
+    server recvd message with body contents:
+  <file>CodePublisher.h</file>
+  
+    server recvd message with body contents:
+  <file>DepAnal.h</file>
+  
+    server recvd message with body contents:
+  <file>DependencyAnalysis.h</file>
+  
+    server recvd message with body contents:
+  <file>Executive.h</file>
+  
+    server recvd message with body contents:
+  <file>TypeTable.h</file>
+  
+    server recvd message with body contents:
+  <msg>Message from client #2</msg>
+  
+    clienthandler thread is terminating
+  
+    path "C:\RegServer" does not exist
+  
+  
+  
+C:\Program Files (x86)\MSBuild\Microsoft.Cpp\v4.0\V140\Microsoft.CppCommon.targets(1755,5): warning MSB3073: The command ""C:\Users\devas\OneDrive\Documents\Visual Studio 2015\Projects\mera_pr4\proj_4\x64\Debug\MsgServer.exe" /RegServer" exited with code 1.
+C:\Program Files (x86)\MSBuild\Microsoft.Cpp\v4.0\V140\Microsoft.CppCommon.targets(1761,5): error MSB8011: Failed to register output. Please try enabling Per-user Redirection or register the component from a command prompt with elevated permissions.

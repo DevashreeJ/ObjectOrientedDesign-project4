@@ -1,0 +1,803 @@
+<html><head><script src="../CssRequirements/scriptFile.js"></script><link rel ="stylesheet"href = "../CssRequirements/styleFile.css"></head><body><h3>Sockets.cpp.cpp.htm</h3><hr/><div class ="indent"><h4>Dependencies:</h4><br><a href =../ResultFolder/Logger.cpp.htm>Logger.cpp</a><br><br><a href =../ResultFolder/Sockets.cpp.htm>Sockets.cpp</a><br></div><hr/><pre>/////////////////////////////////////////////////////////////////////////
+// Sockets.cpp - C++ wrapper for Win32 socket api                      //
+// ver 5.1                                                             //
+// Jim Fawcett, CSE687 - Object Oriented Design, Spring 2016           //
+// CST 4-187, Syracuse University, 315 443-3948, jfawcett@twcny.rr.com //
+//---------------------------------------------------------------------//
+// Jim Fawcett (c) copyright 2015                                      //
+// All rights granted provided this copyright notice is retained       //
+//---------------------------------------------------------------------//
+// Application: OOD Project #4                                         //
+// Platform:    Visual Studio 2015, Dell XPS 8900, Windows 10 pro      //
+/////////////////////////////////////////////////////////////////////////
+
+#include "Sockets.h"
+#include &ltiostream&gt
+#include &ltsstream&gt
+#include &ltthread&gt
+#include &ltmemory&gt
+#include &ltfunctional&gt
+#include &ltexception&gt
+#include "../Utilities/Utilities.h"
+
+using Util = Utilities::StringHelper;
+template&lttypename T&gt
+using Conv = Utilities::Converter&ltT&gt;
+using Show = StaticLogger&lt1&gt;
+
+/////////////////////////////////////////////////////////////////////////////
+// SocketSystem class members
+
+//----&lt constructor starts up sockets by loading winsock lib &gt---------------
+
+SocketSystem::SocketSystem()
+<a href = javascript:toggle_visibility('0');>{</a><div id=0>
+  int iResult = WSAStartup(MAKEWORD(2, 2), &wsaData);
+  if (iResult != 0) <a href = javascript:toggle_visibility('1');>{</a><div id=1>
+    Show::write("\n  WSAStartup failed with error = " + Conv&ltint&gt::toString(iResult));
+  }</div>
+}</div>
+//-----&lt destructor frees winsock lib &gt--------------------------------------
+
+SocketSystem::~SocketSystem()
+<a href = javascript:toggle_visibility('2');>{</a><div id=2>
+  int error = WSACleanup();
+  Show::write("\n  Socket System cleaning up");
+}</div>
+
+/////////////////////////////////////////////////////////////////////////////
+// Socket class members
+
+//----&lt constructor sets TCP protocol and Stream mode &gt----------------------
+
+Socket::Socket(IpVer ipver) : ipver_(ipver)
+<a href = javascript:toggle_visibility('3');>{</a><div id=3>
+  ZeroMemory(&hints, sizeof(hints));
+  hints.ai_family = AF_UNSPEC;
+  hints.ai_socktype = SOCK_STREAM;
+  hints.ai_protocol = IPPROTO_TCP;
+}</div>
+//----&lt promotes Win32 socket to Socket &gt------------------------------------
+/*
+*  You have to set ip version if you want IP6 after promotion, e.g.:
+*     s.ipVer() = IP6;
+*/
+Socket::Socket(::SOCKET sock) : socket_(sock)
+<a href = javascript:toggle_visibility('4');>{</a><div id=4>
+  ipver_ = IP4;
+  ZeroMemory(&hints, sizeof(hints));
+  hints.ai_family = AF_UNSPEC;
+  hints.ai_socktype = SOCK_STREAM;
+  hints.ai_protocol = IPPROTO_TCP;
+}</div>
+//----&lt transfer socket ownership with move constructor &gt--------------------
+
+Socket::Socket(Socket&& s)
+<a href = javascript:toggle_visibility('5');>{</a><div id=5>
+  socket_ = s.socket_;
+  s.socket_ = INVALID_SOCKET;
+  ipver_ = s.ipver_;
+  ZeroMemory(&hints, sizeof(hints));
+  hints.ai_family = s.hints.ai_family;
+  hints.ai_socktype = s.hints.ai_socktype;
+  hints.ai_protocol = s.hints.ai_protocol;
+}</div>
+//----&lt transfer socket ownership with move assignment &gt---------------------
+
+Socket& Socket::operator=(Socket&& s)
+<a href = javascript:toggle_visibility('6');>{</a><div id=6>
+  if (this == &s) return *this;
+  socket_ = s.socket_;
+  s.socket_ = INVALID_SOCKET;
+  ipver_ = s.ipver_;
+  hints.ai_family = s.hints.ai_family;
+  hints.ai_socktype = s.hints.ai_socktype;
+  hints.ai_protocol = s.hints.ai_protocol;
+  return *this;
+}</div>
+//----&lt get, set IP version &gt------------------------------------------------
+/*
+*  Note: 
+*    Only instances of SocketListener are influenced by ipVer().
+*    Clients will use whatever protocol the server supports.
+*/
+Socket::IpVer& Socket::ipVer()
+<a href = javascript:toggle_visibility('7');>{</a><div id=7>
+  return ipver_;
+}</div>
+//----&lt close connection &gt---------------------------------------------------
+
+void Socket::close()
+<a href = javascript:toggle_visibility('8');>{</a><div id=8>
+  if (socket_ != INVALID_SOCKET)
+    ::closesocket(socket_);
+}</div>
+//----&lt tells receiver there will be no more sends from this socket &gt--------
+
+bool Socket::shutDownSend()
+<a href = javascript:toggle_visibility('9');>{</a><div id=9>
+  ::shutdown(socket_, SD_SEND);
+  if (socket_ != INVALID_SOCKET)
+    return true;
+  return false;
+}</div>
+
+//----&lt tells receiver this socket won't call receive anymore &gt--------------
+
+bool Socket::shutDownRecv()
+<a href = javascript:toggle_visibility('10');>{</a><div id=10>
+  ::shutdown(socket_, SD_RECEIVE);
+  if (socket_ != INVALID_SOCKET)
+    return true;
+  return false;
+}</div>
+//----&lt tells receiver there will be no more sends or recvs &gt----------------
+
+bool Socket::shutDown()
+<a href = javascript:toggle_visibility('11');>{</a><div id=11>
+  ::shutdown(socket_, SD_BOTH);
+  if (socket_ != INVALID_SOCKET)
+    return true;
+  return false;
+
+}</div>
+//----&lt destructor closes socket handle &gt------------------------------------
+
+Socket::~Socket() <a href = javascript:toggle_visibility('12');>{</a><div id=12>
+  shutDown();
+  close();
+}</div>
+//----&lt send buffer &gt--------------------------------------------------------
+/*
+*  - bytes must be less than or equal to the size of buffer
+*  - doesn't return until requested number of bytes have been sent
+*/
+bool Socket::send(size_t bytes, byte* buffer)
+<a href = javascript:toggle_visibility('13');>{</a><div id=13>
+  size_t bytesSent = 0, bytesLeft = bytes;
+  byte* pBuf = buffer;
+  while (bytesLeft &gt 0)
+  <a href = javascript:toggle_visibility('14');>{</a><div id=14>
+    bytesSent = ::send(socket_, pBuf, bytesLeft, 0);
+    if (socket_ == INVALID_SOCKET || bytesSent == 0)
+      return false;
+    bytesLeft -= bytesSent;
+    pBuf += bytesSent;
+  }</div>
+  return true;
+}</div>
+//----&lt recv buffer &gt--------------------------------------------------------
+/*
+*  - bytes must be less than or equal to the size of buffer
+*  - doesn't return until buffer has been filled with requested bytes
+*/
+bool Socket::recv(size_t bytes, byte* buffer)
+<a href = javascript:toggle_visibility('15');>{</a><div id=15>
+  size_t bytesRecvd = 0, bytesLeft = bytes;
+  byte* pBuf = buffer;
+  while (bytesLeft &gt 0)
+  <a href = javascript:toggle_visibility('16');>{</a><div id=16>
+    bytesRecvd = ::recv(socket_, pBuf, bytesLeft, 0);
+    if (socket_ == INVALID_SOCKET || bytesRecvd == 0)
+      return false;
+    bytesLeft -= bytesRecvd;
+    pBuf += bytesRecvd;
+  }</div>
+  return true;
+}</div>
+//----&lt sends a terminator terminated string &gt-------------------------------
+/*
+ *  Doesn't return until entire string has been sent
+ *  By default terminator is '\0'
+ */
+bool Socket::sendString(const std::string& str, byte terminator)
+<a href = javascript:toggle_visibility('17');>{</a><div id=17>
+  size_t bytesSent, bytesRemaining = str.size();
+  const byte* pBuf = &(*str.begin());
+  while (bytesRemaining &gt 0)
+  <a href = javascript:toggle_visibility('18');>{</a><div id=18>
+    bytesSent = ::send(socket_, pBuf, bytesRemaining, 0);
+    if (bytesSent == INVALID_SOCKET || bytesSent == 0)
+      return false;
+    bytesRemaining -= bytesSent;
+    pBuf += bytesSent;
+  }</div>
+  ::send(socket_, &terminator, 1, 0);
+  return true;
+}</div>
+//----&lt receives terminator terminated string &gt------------------------------
+/*
+ * Doesn't return until a terminator byte as been received.
+ *
+ * ToDo:
+ * - needs reads of one byte to be replaced by bulk reads into a
+ *   stream buffer to improve efficiency.
+ * - That will require building a circular buffer.
+ * - performance seems acceptable, so won't do this now
+ */
+std::string Socket::recvString(byte terminator)
+<a href = javascript:toggle_visibility('19');>{</a><div id=19>
+  static const int buflen = 1;
+  char buffer[1];
+  std::string str;
+  while (true)
+  <a href = javascript:toggle_visibility('20');>{</a><div id=20>
+    iResult = ::recv(socket_, buffer, buflen, 0);
+    if (iResult == 0 || iResult == INVALID_SOCKET)
+      break;
+    if (buffer[0] == terminator)
+      break;
+    str += buffer[0];
+  }</div>
+  return str;
+}</div>
+//----&lt attempt to send specified number of bytes, but may not send all &gt----
+/*
+ * returns number of bytes actually sent
+ */
+size_t Socket::sendStream(size_t bytes, byte* pBuf)
+<a href = javascript:toggle_visibility('21');>{</a><div id=21>
+  return ::send(socket_, pBuf, bytes, 0);
+}</div>
+//----&lt attempt to recv specified number of bytes, but may not send all &gt----
+/*
+* returns number of bytes actually received
+*/
+size_t Socket::recvStream(size_t bytes, byte* pBuf)
+<a href = javascript:toggle_visibility('22');>{</a><div id=22>
+  return ::recv(socket_, pBuf, bytes, 0);
+}</div>
+//----&lt returns bytes available in recv buffer &gt-----------------------------
+
+size_t Socket::bytesWaiting()
+<a href = javascript:toggle_visibility('23');>{</a><div id=23>
+  unsigned long int ret;
+  ::ioctlsocket(socket_, FIONREAD, &ret);
+  return (size_t)ret;
+}</div>
+//----&lt waits for server data, checking every timeToCheck millisec &gt---------
+
+bool Socket::waitForData(size_t timeToWait, size_t timeToCheck)
+<a href = javascript:toggle_visibility('24');>{</a><div id=24>
+  size_t MaxCount = timeToWait / timeToCheck;
+  static size_t count = 0;
+  while (bytesWaiting() == 0)
+  <a href = javascript:toggle_visibility('25');>{</a><div id=25>
+    if (++count &lt MaxCount)
+      ::Sleep(timeToCheck);
+    else
+      return false;
+  }</div>
+  return true;
+}</div>
+/////////////////////////////////////////////////////////////////////////////
+// SocketConnector class members
+
+//----&lt constructor inherits its base Socket's Win32 socket_ member &gt--------
+
+SocketConnecter::SocketConnecter() : Socket()
+<a href = javascript:toggle_visibility('26');>{</a><div id=26>
+  hints.ai_family = AF_UNSPEC;
+}</div>
+//----&lt move constructor transfers ownership of Win32 socket_ member &gt-------
+
+SocketConnecter::SocketConnecter(SocketConnecter&& s) : Socket()
+<a href = javascript:toggle_visibility('27');>{</a><div id=27>
+  socket_ = s.socket_;
+  s.socket_ = INVALID_SOCKET;
+  ipver_ = s.ipver_;
+  hints.ai_family = s.hints.ai_family;
+  hints.ai_socktype = s.hints.ai_socktype;
+  hints.ai_protocol = s.hints.ai_protocol;
+}</div>
+//----&lt move assignment transfers ownership of Win32 socket_ member &gt--------
+
+SocketConnecter& SocketConnecter::operator=(SocketConnecter&& s)
+<a href = javascript:toggle_visibility('28');>{</a><div id=28>
+  if (this == &s) return *this;
+  socket_ = s.socket_;
+  s.socket_ = INVALID_SOCKET;
+  ipver_ = s.ipver_;
+  hints.ai_family = s.hints.ai_family;
+  hints.ai_socktype = s.hints.ai_socktype;
+  hints.ai_protocol = s.hints.ai_protocol;
+  return *this;
+}</div>
+//----&lt destructor announces destruction if Verbose(true) &gt------------------
+
+SocketConnecter::~SocketConnecter()
+<a href = javascript:toggle_visibility('29');>{</a><div id=29>
+  Show::write("\n  SocketConnecter instance destroyed");
+}</div>
+//----&lt request to connect to ip and port &gt----------------------------------
+
+bool SocketConnecter::connect(const std::string& ip, size_t port)
+<a href = javascript:toggle_visibility('30');>{</a><div id=30>
+  size_t uport = htons((u_short)port);
+  std::string sPort = Conv&ltsize_t&gt::toString(uport);
+
+  // Resolve the server address and port
+  const char* pTemp = ip.c_str();
+  iResult = getaddrinfo(pTemp, sPort.c_str(), &hints, &result);  // was DEFAULT_PORT
+  if (iResult != 0) <a href = javascript:toggle_visibility('31');>{</a><div id=31>
+    Show::write("\n\n  -- getaddrinfo failed with error: " + Conv&ltint&gt::toString(iResult));
+    return false;
+  }</div>
+
+  // Attempt to connect to an address until one succeeds
+  for (ptr = result; ptr != NULL; ptr = ptr-&gtai_next) <a href = javascript:toggle_visibility('32');>{</a><div id=32>
+
+    char ipstr[INET6_ADDRSTRLEN];
+    void *addr;
+    char *ipver;
+
+    // get pointer to address - different fields in IPv4 and IPv6:
+
+    if (ptr-&gtai_family == AF_INET) <a href = javascript:toggle_visibility('33');>{</a><div id=33> // IPv4
+      struct sockaddr_in *ipv4 = (struct sockaddr_in *)ptr-&gtai_addr;
+      addr = &(ipv4-&gtsin_addr);
+      ipver = "IPv4";
+    }</div>
+    else <a href = javascript:toggle_visibility('34');>{</a><div id=34> // IPv6
+      struct sockaddr_in6 *ipv6 = (struct sockaddr_in6 *)ptr-&gtai_addr;
+      addr = &(ipv6-&gtsin6_addr);
+      ipver = "IPv6";
+    }</div>
+
+    // convert the IP to a string and print it:
+    inet_ntop(ptr-&gtai_family, addr, ipstr, sizeof ipstr);
+    printf("\n  %s: %s", ipver, ipstr);
+
+    // Create a SOCKET for connecting to server
+    socket_ = socket(ptr-&gtai_family, ptr-&gtai_socktype, ptr-&gtai_protocol);
+    if (socket_ == INVALID_SOCKET) <a href = javascript:toggle_visibility('35');>{</a><div id=35>
+      int error = WSAGetLastError();
+      Show::write("\n\n  -- socket failed with error: " + Conv&ltint&gt::toString(error));
+      return false;
+    }</div>
+
+    iResult = ::connect(socket_, ptr-&gtai_addr, (int)ptr-&gtai_addrlen);
+    if (iResult == SOCKET_ERROR) <a href = javascript:toggle_visibility('36');>{</a><div id=36>
+      socket_ = INVALID_SOCKET;
+      int error = WSAGetLastError();
+      Show::write("\n  WSAGetLastError returned " + Conv&ltint&gt::toString(error));
+      continue;
+    }</div>
+    break;
+  }</div>
+
+  freeaddrinfo(result);
+
+  if (socket_ == INVALID_SOCKET) <a href = javascript:toggle_visibility('37');>{</a><div id=37>
+    int error = WSAGetLastError();
+    Show::write("\n\n  -- unable to connect to server, error = " + Conv&ltint&gt::toString(error));
+    return false;
+  }</div>
+  return true;
+}</div>
+/////////////////////////////////////////////////////////////////////////////
+// SocketListener class members
+
+//----&lt constructs SocketListener, specifying type of protocol to use &gt------
+
+SocketListener::SocketListener(size_t port, IpVer ipv) : Socket(ipv), port_(port)
+<a href = javascript:toggle_visibility('38');>{</a><div id=38>
+  socket_ = INVALID_SOCKET;
+  ZeroMemory(&hints, sizeof(hints));
+  if (ipv == Socket::IP6)
+    hints.ai_family = AF_INET6;       // use this if you want an IP6 address
+  else
+    hints.ai_family = AF_INET;        // this gives IP4 address
+  hints.ai_socktype = SOCK_STREAM;
+  hints.ai_protocol = IPPROTO_TCP;
+  hints.ai_flags = AI_PASSIVE;
+}</div>
+//----&lt move constructor transfers ownership of Win32 socket_ member &gt-------
+
+SocketListener::SocketListener(SocketListener&& s) : Socket()
+<a href = javascript:toggle_visibility('39');>{</a><div id=39>
+  socket_ = s.socket_;
+  s.socket_ = INVALID_SOCKET;
+  ipver_ = s.ipver_;
+  hints.ai_family = s.hints.ai_family;
+  hints.ai_socktype = s.hints.ai_socktype;
+  hints.ai_protocol = s.hints.ai_protocol;
+  hints.ai_flags = s.hints.ai_flags;
+}</div>
+//----&lt move assignment transfers ownership of Win32 socket_ member &gt--------
+
+SocketListener& SocketListener::operator=(SocketListener&& s)
+<a href = javascript:toggle_visibility('40');>{</a><div id=40>
+  if (this == &s) return *this;
+  socket_ = s.socket_;
+  s.socket_ = INVALID_SOCKET;
+  ipver_ = s.ipver_;
+  hints.ai_family = s.hints.ai_family;
+  hints.ai_socktype = s.hints.ai_socktype;
+  hints.ai_protocol = s.hints.ai_protocol;
+  hints.ai_flags = s.hints.ai_flags;
+  return *this;
+}</div>
+//----&lt destructor announces destruction if Verbal(true) &gt-------------------
+
+SocketListener::~SocketListener()
+<a href = javascript:toggle_visibility('41');>{</a><div id=41>
+  Show::write("\n  SocketListener instance destroyed");
+}</div>
+//----&lt binds SocketListener to a network adddress on local machine &gt--------
+
+bool SocketListener::bind()
+<a href = javascript:toggle_visibility('42');>{</a><div id=42>
+  // Resolve the server address and port
+
+  size_t uport = ::htons((u_short)port_);
+  std::string sPort = Conv&ltsize_t&gt::toString(uport);
+  iResult = getaddrinfo(NULL, sPort.c_str(), &hints, &result);
+  if (iResult != 0) <a href = javascript:toggle_visibility('43');>{</a><div id=43>
+    Show::write("\n\n  -- getaddrinfo failed with error: " + Conv&ltint&gt::toString(iResult));
+    return false;
+  }</div>
+
+  // Iterate through all results and bind to first available
+
+  for (auto pResult = result; pResult != NULL; pResult = pResult-&gtai_next)
+  <a href = javascript:toggle_visibility('44');>{</a><div id=44>
+    // Create a SOCKET for connecting to server
+   
+    socket_ = socket(pResult-&gtai_family, pResult-&gtai_socktype, pResult-&gtai_protocol);
+    if (socket_ == INVALID_SOCKET) <a href = javascript:toggle_visibility('45');>{</a><div id=45>
+      int error = WSAGetLastError();
+      Show::write("\n\n  -- socket failed with error: " + Conv&ltint&gt::toString(error));
+      continue;
+    }</div>
+    Show::write("\n  server created ListenSocket");
+
+    // Setup the TCP listening socket
+
+    iResult = ::bind(socket_, pResult-&gtai_addr, (int)pResult-&gtai_addrlen);
+    if (iResult == SOCKET_ERROR) <a href = javascript:toggle_visibility('46');>{</a><div id=46>
+      int error = WSAGetLastError();
+      Show::write("\n\n  -- bind failed with error: " + Conv&ltint&gt::toString(error));
+      socket_ = INVALID_SOCKET;
+      continue;
+    }</div>
+    else
+    <a href = javascript:toggle_visibility('47');>{</a><div id=47>
+      break;
+    }</div>
+  }</div>
+  freeaddrinfo(result);
+  return true;
+}</div>
+//----&lt put SocketListener in listen mode, doesn't block &gt-------------------
+
+bool SocketListener::listen()
+<a href = javascript:toggle_visibility('48');>{</a><div id=48>
+  iResult = ::listen(socket_, SOMAXCONN);
+  if (iResult == SOCKET_ERROR) <a href = javascript:toggle_visibility('49');>{</a><div id=49>
+    int error = WSAGetLastError();
+    Show::write("\n\n  -- listen failed with error: " + Conv&ltint&gt::toString(error));
+    socket_ = INVALID_SOCKET;
+    return false;
+  }</div>
+  Show::write("\n  server TCP listening socket setup complete");
+  return true;
+}</div>
+//----&lt accepts incoming requrests to connect - blocking call &gt--------------
+
+Socket SocketListener::accept()
+<a href = javascript:toggle_visibility('50');>{</a><div id=50>
+  ::SOCKET sock = ::accept(socket_, NULL, NULL);
+  Socket clientSocket = sock;    // uses Socket(::SOCKET) promotion ctor
+  if (!clientSocket.validState()) <a href = javascript:toggle_visibility('51');>{</a><div id=51>
+    acceptFailed_ = true;
+    int error = WSAGetLastError();
+    Show::write("\n\n  -- server accept failed with error: " + Conv&ltint&gt::toString(error));
+    Show::write(
+      "\n  -- this occurs when application shuts down while listener thread is blocked on Accept call"
+    );
+    return clientSocket;
+  }</div>
+  return clientSocket;
+}</div>
+//----&lt request SocketListener to stop accepting connections &gt---------------
+
+void SocketListener::stop()
+<a href = javascript:toggle_visibility('52');>{</a><div id=52>
+  stop_.exchange(true);
+  sendString("Stop!");
+}</div>
+
+#ifdef TEST_SOCKETS
+
+//----&lt test stub &gt----------------------------------------------------------
+
+/////////////////////////////////////////////////////////////////////////////
+// Server's client handler class
+// - must be callable object so we've built as a functor
+// - passed to SocketListener::start(CallObject& co)
+// - Client handling thread starts by calling operator()
+
+class ClientHandler
+<a href = javascript:toggle_visibility('53');>{</a><div id=53>
+public:
+  void operator()(Socket& socket_);
+  bool testStringHandling(Socket& socket_);
+  bool testBufferHandling(Socket& socket_);
+}</div>;
+
+//----&lt Client Handler thread starts running this function &gt-----------------
+
+void clearBuffer(Socket::byte* buffer, size_t BufLen)
+<a href = javascript:toggle_visibility('54');>{</a><div id=54>
+  for (size_t i = 0; i &lt BufLen; ++i)
+    buffer[i] = '\0';
+}</div>
+
+void ClientHandler::operator()(Socket& socket_)
+<a href = javascript:toggle_visibility('55');>{</a><div id=55>
+  while (true)
+  <a href = javascript:toggle_visibility('56');>{</a><div id=56>
+    // interpret test command
+
+    std::string command = socket_.recvString();
+    Show::write("\n  server rcvd command: " + command);
+    if (command == "Done")
+    <a href = javascript:toggle_visibility('57');>{</a><div id=57>
+      Show::write("\n  server sent : " + command);
+      socket_.sendString(command);
+      break;
+    }</div>
+    if (command.size() == 0)
+    <a href = javascript:toggle_visibility('58');>{</a><div id=58>
+      Show::write("\n  client connection closed");
+      break;
+    }</div>
+    //Show::write("\n  server recvd: " + command);
+
+    if (command == "TEST_STRING_HANDLING")
+    <a href = javascript:toggle_visibility('59');>{</a><div id=59>
+      if (testStringHandling(socket_))
+        Show::write("\n  ----String Handling test passed\n");
+      else
+        Show::write("\n  ----String Handling test failed\n");
+      continue; // go back and get another command
+    }</div>
+    if (command == "TEST_BUFFER_HANDLING")
+    <a href = javascript:toggle_visibility('60');>{</a><div id=60>
+      if (testBufferHandling(socket_))
+        Show::write("\n  ----Buffer Handling test passed\n");
+      else
+        Show::write("\n  ----Buffer Handling test failed\n");
+      continue;  // get another command
+    }</div>
+  }</div>
+
+  // we get here if command isn't requesting a test, e.g., "TEST_STOP"
+
+  Show::write("\n");
+  Show::write("\n  ClientHandler socket connection closing");
+  socket_.shutDown();
+  socket_.close();
+  Show::write("\n  ClientHandler thread terminating");
+}</div>
+
+//----&lt test string handling &gt-----------------------------------------------
+/*
+*   Creates strings, sends to server, then reads strings server echos back.
+*/
+bool ClientHandler::testStringHandling(Socket& socket_)
+<a href = javascript:toggle_visibility('61');>{</a><div id=61>
+  Show::title("String handling test on server");
+
+  while (true)
+  <a href = javascript:toggle_visibility('62');>{</a><div id=62>
+    std::string str = socket_.recvString();
+    if (socket_ == INVALID_SOCKET)
+      return false;
+    if (str.size() &gt 0)
+    <a href = javascript:toggle_visibility('63');>{</a><div id=63>
+      //Show::write("\n  bytes recvd at server: " + toString(str.size() + 1));
+      Show::write("\n  server rcvd : " + str);
+
+      if (socket_.sendString(str))
+      <a href = javascript:toggle_visibility('64');>{</a><div id=64>
+        Show::write("\n  server sent : " + str);
+      }</div>
+      else
+      <a href = javascript:toggle_visibility('65');>{</a><div id=65>
+        return false;
+      }</div>
+      if (str == "TEST_END")
+        break;
+    }</div>
+    else
+    <a href = javascript:toggle_visibility('66');>{</a><div id=66>
+      break;
+    }</div>
+  }</div>
+  //socket_.sendString("TEST_STRING_HANDLING_END");
+  Show::write("\n  End of string handling test");
+  return true;
+}</div>
+
+//----&lt test buffer handling &gt-----------------------------------------------
+/*
+*   Creates buffers, sends to server, then reads buffers server echos back.
+*/
+bool ClientHandler::testBufferHandling(Socket& socket_)
+<a href = javascript:toggle_visibility('67');>{</a><div id=67>
+  Show::title("Buffer handling test on server");
+  const size_t BufLen = 20;
+  Socket::byte buffer[BufLen];
+  bool ok;
+
+  while (true)
+  <a href = javascript:toggle_visibility('68');>{</a><div id=68>
+    ok = socket_.recv(BufLen, buffer);
+    if (socket_ == INVALID_SOCKET)
+      return false;
+    if (ok)
+    <a href = javascript:toggle_visibility('69');>{</a><div id=69>
+      std::string temp;
+      for (size_t i = 0; i &lt BufLen; ++i)
+        temp += buffer[i];
+      //Show::write("\n  bytes recvd at server: " + toString(BufLen));
+      Show::write("\n  server rcvd : " + temp);
+
+      if (socket_.send(BufLen, buffer))
+      <a href = javascript:toggle_visibility('70');>{</a><div id=70>
+        Show::write("\n  server sent : " + std::string(buffer));
+      }</div>
+      else
+      <a href = javascript:toggle_visibility('71');>{</a><div id=71>
+        Show::write("\n  server send failed");
+        return false;
+      }</div>
+      if (temp.find("TEST_END") != std::string::npos)
+        break;
+    }</div>
+    else
+    <a href = javascript:toggle_visibility('72');>{</a><div id=72>
+      break;
+    }</div>
+  }</div>
+  Show::write("\n  End of buffer handling test");
+  return true;
+}</div>
+
+//----&lt test string handling - server echos back client sent string &gt--------
+
+void clientTestStringHandling(Socket& si)
+<a href = javascript:toggle_visibility('73');>{</a><div id=73>
+  std::string command = "TEST_STRING_HANDLING";
+  si.sendString(command);
+  Show::write("\n  client sent : " + command);
+
+  for (size_t i = 0; i &lt 5; ++i)
+  <a href = javascript:toggle_visibility('74');>{</a><div id=74>
+    std::string text = "Hello World " + std::string("#") + Conv&ltsize_t&gt::toString(i + 1);
+    si.sendString(text);
+    Show::write("\n  client sent : " + text);
+  }</div>
+  command = "TEST_END";
+  si.sendString(command);
+  Show::write("\n  client sent : " + command);
+
+  while (true)
+  <a href = javascript:toggle_visibility('75');>{</a><div id=75>
+    std::string str = si.recvString();
+    if (str.size() == 0)
+    <a href = javascript:toggle_visibility('76');>{</a><div id=76>
+      Show::write("\n  client detected closed connection");
+      break;
+    }</div>
+    Show::write("\n  client recvd: " + str);
+    if (str == "TEST_END")
+    <a href = javascript:toggle_visibility('77');>{</a><div id=77>
+      Show::write("\n  End of string handling test");
+      break;
+    }</div>
+  }</div>
+}</div>
+//----&lt test buffer handling - server echos back client sent buffer &gt--------
+
+void clientTestBufferHandling(Socket& si)
+<a href = javascript:toggle_visibility('78');>{</a><div id=78>
+  std::string command = "TEST_BUFFER_HANDLING";
+  si.sendString(command);
+  Show::write("\n  client sent : " + command);
+
+  const int BufLen = 20;
+  Socket::byte buffer[BufLen];
+
+  for (size_t i = 0; i &lt 5; ++i)
+  <a href = javascript:toggle_visibility('79');>{</a><div id=79>
+    std::string text = "Hello World " + std::string("#") + Conv&ltsize_t&gt::toString(i + 1);
+    for (size_t i = 0; i &lt BufLen; ++i)
+    <a href = javascript:toggle_visibility('80');>{</a><div id=80>
+      if (i &lt text.size())
+        buffer[i] = text[i];
+      else
+        buffer[i] = '.';
+    }</div>
+    buffer[BufLen - 1] = '\0';
+    si.send(BufLen, buffer);
+    Show::write("\n  client sent : " + std::string(buffer));
+  }</div>
+  std::string text = "TEST_END";
+  for (size_t i = 0; i &lt BufLen; ++i)
+  <a href = javascript:toggle_visibility('81');>{</a><div id=81>
+    if (i &lt text.size())
+      buffer[i] = text[i];
+    else
+      buffer[i] = '.';
+  }</div>
+  buffer[BufLen - 1] = '\0';
+  si.send(BufLen, buffer);
+  Show::write("\n  client sent : " + std::string(buffer));
+
+  bool ok;
+  while (true)
+  <a href = javascript:toggle_visibility('82');>{</a><div id=82>
+    ok = si.recv(BufLen, buffer);
+    if (!ok)
+    <a href = javascript:toggle_visibility('83');>{</a><div id=83>
+      Show::write("\n  client unable to receive");
+      break;
+    }</div>
+    std::string str(buffer);
+    if (str.size() == 0)
+    <a href = javascript:toggle_visibility('84');>{</a><div id=84>
+      Show::write("\n  client detected closed connection");
+      break;
+    }</div>
+    Show::write("\n  client rcvd : " + str);
+    if (str.find("TEST_END") != std::string::npos)
+    <a href = javascript:toggle_visibility('85');>{</a><div id=85>
+      Show::write("\n  End of buffer handling test");
+      break;
+    }</div>
+  }</div>
+}</div>
+//----&lt demonstration &gt------------------------------------------------------
+
+int main(int argc, char* argv[])
+<a href = javascript:toggle_visibility('86');>{</a><div id=86>
+  Show::attach(&std::cout);
+  Show::start();
+  Show::title("Testing Sockets", '=');
+
+  try
+  <a href = javascript:toggle_visibility('87');>{</a><div id=87>
+    SocketSystem ss;
+    SocketConnecter si;
+    SocketListener sl(9070, Socket::IP6);
+    ClientHandler cp;
+    sl.start(cp);
+    while (!si.connect("localhost", 9070))
+    <a href = javascript:toggle_visibility('88');>{</a><div id=88>
+      Show::write("\n  client waiting to connect");
+      ::Sleep(100);
+    }</div>
+
+    Show::title("Starting string test on client");
+    clientTestStringHandling(si);
+    Show::title("Starting buffer test on client");
+    clientTestBufferHandling(si);
+
+    si.sendString("TEST_STOP");
+
+    Show::write("\n\n  client calling send shutdown\n");
+    si.shutDownSend();
+    sl.stop();
+  }</div>
+  catch (std::exception& ex)
+  <a href = javascript:toggle_visibility('89');>{</a><div id=89>
+    std::cout &lt&lt "\n  Exception caught:";
+    std::cout &lt&lt "\n  " &lt&lt ex.what() &lt&lt "\n\n";
+  }</div>
+}</div>
+
+#endif
+</pre></body></html>

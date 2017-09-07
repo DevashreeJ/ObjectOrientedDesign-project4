@@ -1,0 +1,22 @@
+#pragma once
+#include&ltiostream&gt
+#include"A.h"
+#include"B.h"
+
+using namespace std;
+#ifdef  TEST
+#define TEST
+int main()
+{
+	A a;
+	B b;
+	b.blah();
+	a.dosomething();
+	return 0;
+}
+#endif TEST
+
+void A::dosomething()
+{
+	cout &lt&lt "do something" &lt&lt endl;
+}

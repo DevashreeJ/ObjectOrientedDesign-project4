@@ -1,0 +1,27 @@
+﻿  MsgServer.cpp
+  XmlElement.cpp
+  XmlDocument.cpp
+  Utilities.cpp
+  TypeTable.cpp
+  Tokenizer.cpp
+  Sockets.cpp
+  SemiExp.cpp
+  Parser.cpp
+  ConfigureParser.cpp
+  ActionsAndRules.cpp
+  Logger.cpp
+  Cpp11-BlockingQueue.cpp
+  HttpMessage.cpp
+  GrammarHelpers.cpp
+  FileSystem.cpp
+  FileMgr.cpp
+  DependencyAnalysis.cpp
+  CodePublisher.cpp
+  Executive.cpp
+  Generating Code...
+  Compiling...
+  DepAnal.cpp
+  AbstrSynTree.cpp
+  Generating Code...
+  MsgServer.vcxproj -> C:\Users\devas\OneDrive\Documents\Visual Studio 2015\Projects\mera_pr4\proj_4\Debug\MsgServer.exe
+  MsgServer.vcxproj -> C:\Users\devas\OneDrive\Documents\Visual Studio 2015\Projects\mera_pr4\proj_4\Debug\MsgServer.pdb (Full PDB)

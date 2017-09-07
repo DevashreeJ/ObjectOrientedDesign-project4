@@ -1,0 +1,83 @@
+<html><head><link rel=stylesheet type=text/css href=../styleFile.css><script src=../scriptFile.js></script><body><h3>Logger.h.htm</h3><hr/><div class ="indent"><h4>Dependencies:</h4><br><a href =../ResultFolder/CodePublisher.h.htm>CodePublisher.h</a><br><br><a href =../ResultFolder/DepAnal.h.htm>DepAnal.h</a><br><br><a href =../ResultFolder/DependencyAnalysis.h.htm>DependencyAnalysis.h</a><br><br><a href =../ResultFolder/Executive.cpp.htm>Executive.cpp</a><br><br><a href =../ResultFolder/Executive.h.htm>Executive.h</a><br><br><a href =../ResultFolder/Logger.cpp.htm>Logger.cpp</a><br><br><a href =../ResultFolder/Logger.h.htm>Logger.h</a><br><br><a href =../ResultFolder/Sockets.cpp.htm>Sockets.cpp</a><br><br><a href =../ResultFolder/Sockets.h.htm>Sockets.h</a><br><br><a href =../ResultFolder/TypeTable.h.htm>TypeTable.h</a><br></div><hr/><pre>#ifndef LOGGER_H
+#define LOGGER_H
+/////////////////////////////////////////////////////////////////////
+// Logger.h - log text messages to std::ostream                    //
+// ver 1.0                                                         //
+//-----------------------------------------------------------------//
+// Jim Fawcett (c) copyright 2015                                  //
+// All rights granted provided this copyright notice is retained   //
+//-----------------------------------------------------------------//
+// Language:    C++, Visual Studio 2015                            //
+// Application: Several Projects, CSE687 - Object Oriented Design  //
+// Author:      Jim Fawcett, Syracuse University, CST 4-187        //
+//              jfawcett@twcny.rr.com                              //
+/////////////////////////////////////////////////////////////////////
+/*
+* Package Operations:
+* -------------------
+* This package supports logging for multiple concurrent clients to a
+* single std::ostream.  It does this be enqueuing messages in a
+* blocking queue and dequeuing with a single thread that writes to
+* the std::ostream.
+*
+* Build Process:
+* --------------
+* Required Files: Logger.h, Logger.cpp, Utilities.h, Utilities.cpp
+*
+* Build Command: devenv logger.sln /rebuild debug
+*
+* Maintenance History:
+* --------------------
+* ver 1.0 : 22 Feb 2016
+* - first release
+*
+* Planned Additions and Changes:
+* ------------------------------
+* - none yet
+*/
+
+#include &ltiostream&gt
+#include &ltstring&gt
+#include &ltthread&gt
+#include "Cpp11-BlockingQueue.h"
+
+class Logger
+<a href = javascript:toggle_visibility('0');>{</a><div id=0>
+public:
+  Logger() <a href = javascript:toggle_visibility('1');>{</a><div id=1>}</div>
+  void attach(std::ostream* pOut);
+  void start();
+  void stop(const std::string& msg = "");
+  void write(const std::string& msg);
+  void title(const std::string& msg, char underline = '-');
+  ~Logger();
+  Logger(const Logger&) = delete;
+  Logger& operator=(const Logger&) = delete;
+private:
+  std::thread* _pThr;
+  std::ostream* _pOut;
+  BlockingQueue&ltstd::string&gt _queue;
+  bool _ThreadRunning = false;
+}</div>;
+
+template&ltint i&gt
+class StaticLogger
+<a href = javascript:toggle_visibility('2');>{</a><div id=2>
+public:
+  static void attach(std::ostream* pOut) <a href = javascript:toggle_visibility('3');>{</a><div id=3> _logger.attach(pOut); }</div>
+  static void start() <a href = javascript:toggle_visibility('4');>{</a><div id=4> _logger.start(); }</div>
+  static void stop(const std::string& msg="") <a href = javascript:toggle_visibility('5');>{</a><div id=5> _logger.stop(msg); }</div>
+  static void write(const std::string& msg) <a href = javascript:toggle_visibility('6');>{</a><div id=6> _logger.write(msg); }</div>
+  static void title(const std::string& msg, char underline = '-') <a href = javascript:toggle_visibility('7');>{</a><div id=7> _logger.title(msg, underline); }</div>
+  static Logger& instance() <a href = javascript:toggle_visibility('8');>{</a><div id=8> return _logger; }</div>
+  StaticLogger(const StaticLogger&) = delete;
+  StaticLogger& operator=(const StaticLogger&) = delete;
+private:
+  static Logger _logger;
+}</div>;
+
+template&ltint i&gt
+Logger StaticLogger&lti&gt::_logger;
+
+#endif
+</pre></body></html>

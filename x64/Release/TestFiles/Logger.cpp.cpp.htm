@@ -1,0 +1,117 @@
+<html><head><script src="../CssRequirements/scriptFile.js"></script><link rel ="stylesheet"href = "../CssRequirements/styleFile.css"></head><body><h3>Logger.cpp.cpp.htm</h3><hr/><div class ="indent"><h4>Dependencies:</h4><br><a href =../ResultFolder/Logger.cpp.htm>Logger.cpp</a><br><br><a href =../ResultFolder/Sockets.cpp.htm>Sockets.cpp</a><br></div><hr/><pre>/////////////////////////////////////////////////////////////////////
+// Logger.cpp - log text messages to std::ostream                  //
+// ver 1.0                                                         //
+//-----------------------------------------------------------------//
+// Jim Fawcett (c) copyright 2015                                  //
+// All rights granted provided this copyright notice is retained   //
+//-----------------------------------------------------------------//
+// Language:    C++, Visual Studio 2015                            //
+// Application: Several Projects, CSE687 - Object Oriented Design  //
+// Author:      Jim Fawcett, Syracuse University, CST 4-187        //
+//              jfawcett@twcny.rr.com                              //
+/////////////////////////////////////////////////////////////////////
+
+#include &ltfunctional&gt
+#include "Logger.h"
+#include "../Utilities/Utilities.h"
+
+//----&lt send text message to std::ostream &gt--------------------------
+
+void Logger::write(const std::string& msg)
+<a href = javascript:toggle_visibility('0');>{</a><div id=0>
+  if(_ThreadRunning)
+    _queue.enQ(msg);
+}</div>
+void Logger::title(const std::string& msg, char underline)
+<a href = javascript:toggle_visibility('1');>{</a><div id=1>
+  std::string temp = "\n  " + msg + "\n " + std::string(msg.size() + 2, underline);
+  write(temp);
+}</div>
+//----&lt attach logger to existing std::ostream &gt---------------------
+
+void Logger::attach(std::ostream* pOut) 
+<a href = javascript:toggle_visibility('2');>{</a><div id=2> 
+  _pOut = pOut; 
+}</div>
+//----&lt start logging &gt----------------------------------------------
+
+void Logger::start()
+<a href = javascript:toggle_visibility('3');>{</a><div id=3>
+  if (_ThreadRunning)
+    return;
+  _ThreadRunning = true;
+  std::function&ltvoid()&gt tp = [=]() <a href = javascript:toggle_visibility('4');>{</a><div id=4>
+    while (true)
+    <a href = javascript:toggle_visibility('5');>{</a><div id=5>
+      std::string msg = _queue.deQ();
+      if (msg == "quit")
+      <a href = javascript:toggle_visibility('6');>{</a><div id=6>
+        _ThreadRunning = false;
+        break;
+      }</div>
+      *_pOut &lt&lt msg;
+    }</div>
+  }</div>;
+  std::thread thr(tp);
+  thr.detach();
+}</div>
+//----&lt stop logging &gt-----------------------------------------------
+
+void Logger::stop(const std::string& msg)
+<a href = javascript:toggle_visibility('7');>{</a><div id=7>
+  if (_ThreadRunning)
+  <a href = javascript:toggle_visibility('8');>{</a><div id=8>
+    if(msg != "")
+      write(msg);
+    write("quit");  // request thread to stop
+    while (_ThreadRunning)
+      /* wait for thread to stop*/
+      ;
+  }</div>
+}</div>
+//----&lt stop logging thread &gt----------------------------------------
+
+Logger::~Logger()
+<a href = javascript:toggle_visibility('9');>{</a><div id=9>
+  stop(); 
+}</div>
+
+struct Cosmetic
+<a href = javascript:toggle_visibility('10');>{</a><div id=10>
+  ~Cosmetic() <a href = javascript:toggle_visibility('11');>{</a><div id=11> std::cout &lt&lt "\n\n"; }</div>
+}</div> cosmetic;
+
+#ifdef TEST_LOGGER
+
+using Util = Utilities::StringHelper;
+
+int main()
+<a href = javascript:toggle_visibility('12');>{</a><div id=12>
+  //Util::Title("Testing Logger Class");
+  Logger log;
+  log.attach(&std::cout);
+  log.write("\n  won't get logged - not started yet");
+  log.start();
+  log.title("Testing Logger Class", '=');
+  log.write("\n  one");
+  log.write("\n  two");
+  log.write("\n  fini");
+  log.stop();
+  log.write("\n  won't get logged - stopped");
+  log.start();
+  log.write("\n  starting again");
+  log.write("\n  and stopping again");
+  log.stop("\n  terminating now");
+
+  StaticLogger&lt1&gt::attach(&std::cout);
+  StaticLogger&lt1&gt::start();
+  StaticLogger&lt1&gt::write("\n");
+  StaticLogger&lt1&gt::title("Testing StaticLogger class");
+  StaticLogger&lt1&gt::write("\n  static logger at work");
+  Logger& logger = StaticLogger&lt1&gt::instance();
+  logger.write("\n  static logger still at work");
+  logger.stop("\n  stopping static logger");
+}</div>
+
+#endif
+</pre></body></html>

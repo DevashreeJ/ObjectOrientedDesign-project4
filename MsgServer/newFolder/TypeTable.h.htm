@@ -1,0 +1,57 @@
+#pragma once
+#pragma once
+#include&ltunordered_map&gt
+#include"../AbstractSyntaxTree/AbstrSynTree.h"
+
+///////////////////////////////////////////////////////////////////////////
+// TypeTable.h- To demonstrate code for generating type table																		
+// Author: Devashree Jadhav		SUID:244997526		       						 
+///////////////////////////////////////////////////////////////////////////
+/*
+* Operations:
+* -------------------
+* This file is created to create the type table
+* insertTypeTable()= funtion to insert data into the type table
+* Required Files:
+* ---------------
+* AbstrSynTree.h
+*
+* Maintenance History:
+* --------------------
+* Ver 1.0 : March 12, 2017
+* - first release
+*/
+
+
+#pragma warning (disable : 4101)  // disable warning re unused variable x, below
+
+class TypeTable
+{
+private:
+	std::unordered_map&ltstd::string, std::pair&ltstd::string, std::string&gt&gt typetable;
+
+public:
+
+	std::unordered_map&ltstd::string, std::pair&ltstd::string, std::string&gt&gt& getTable()
+	{
+		return typetable;
+	}
+
+	void setvalue(std::unordered_map&ltstd::string, std::pair&ltstd::string, std::string&gt&gt &table)
+	{
+		this-&gttypetable = table;
+	}
+	void insertIntoTable(CodeAnalysis::ASTNode* pNode);
+};
+
+inline void  TypeTable::insertIntoTable(CodeAnalysis::ASTNode* pNode)
+{
+	if (pNode-&gttype_ == "class" || pNode-&gttype_ == "enum" || pNode-&gttype_ == "struct" || pNode-&gttype_ == "typedef" || pNode-&gttype_ == "using")
+	{
+		std::pair&ltstd::string, std::string&gt temp;
+		temp.first = pNode-&gttype_;
+		temp.second = pNode-&gtpackage_;
+		typetable.insert(std::make_pair(pNode-&gtname_, temp));
+	}
+}
+
